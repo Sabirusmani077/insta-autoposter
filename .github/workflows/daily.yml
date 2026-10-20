@@ -1,0 +1,44 @@
+name: Daily Instagram Post
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Really publish to Instagram? (true/false)"
+        default: "false"
+concurrency: daily-post
+permissions:
+  contents: write
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    env:
+      DO_PUBLISH: ${{ (github.event_name == 'schedule' && vars.ACTIVATED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish == 'true') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y fonts-freefont-ttf libraqm0 && pip install pillow
+      - run: python main.py prepare
+      - name: Commit image
+        run: |
+          git config user.name "autoposter"
+          git config user.email "bot@users.noreply.github.com"
+          git add images
+          git commit -m "image" || true
+          git push || true
+      - name: Publish
+        if: env.DO_PUBLISH == 'true'
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+        run: python main.py publish
+      - name: Save history
+        if: always() && env.DO_PUBLISH == 'true'
+        run: |
+          git add history.json
+          git commit -m "history" || true
+          git pull --rebase || true
+          git push || true

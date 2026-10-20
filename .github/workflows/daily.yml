@@ -21,7 +21,7 @@ jobs:
   post:
     runs-on: ubuntu-latest
     env:
-      DO_PUBLISH: ${{ (github.event_name == 'schedule' && vars.ACTIVATED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish == 'true') }}
+      DO_PUBLISH: ${{ (github.event_name == 'schedule' && vars.ACTIVATED != 'false') || (github.event_name == 'workflow_dispatch' && inputs.publish == 'true') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

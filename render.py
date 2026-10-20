@@ -1,12 +1,38 @@
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops
-import random, math
+import random, math, os
+ROOT = os.path.dirname(os.path.abspath(__file__))
 W, H = 1080, 1350
-FB = "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
-FR = "/usr/share/fonts/truetype/freefont/FreeSans.ttf"
+FONTS_DIR = os.path.join(ROOT, "fonts")
+FB_CANDIDATES = [
+    os.path.join(FONTS_DIR, "NotoSansDevanagari-Bold.ttf"),
+    "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    "C:/Windows/Fonts/NirmalaB.ttf",
+    "C:/Windows/Fonts/arialbd.ttf"
+]
+FR_CANDIDATES = [
+    os.path.join(FONTS_DIR, "NotoSansDevanagari-Regular.ttf"),
+    "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    "C:/Windows/Fonts/Nirmala.ttf",
+    "C:/Windows/Fonts/arial.ttf"
+]
+
+def resolve_font_path(candidates):
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return candidates[0]
+
+FB = resolve_font_path(FB_CANDIDATES)
+FR = resolve_font_path(FR_CANDIDATES)
 WATERMARK = "@sabir_usmani_077"
 
 def font(p, s):
-    return ImageFont.truetype(p, s, layout_engine=ImageFont.Layout.RAQM)
+    try:
+        return ImageFont.truetype(p, s, layout_engine=ImageFont.Layout.RAQM)
+    except Exception:
+        return ImageFont.truetype(p, s)
 
 def grad(stops):
     img = Image.new("RGB", (W, H)); d = ImageDraw.Draw(img)

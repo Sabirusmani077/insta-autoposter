@@ -1,44 +1,70 @@
 name: Daily Instagram Post
+
 on:
   schedule:
+    # 02:30 UTC = 08:00 AM Indian Standard Time (IST = UTC + 5:30)
     - cron: "30 2 * * *"
   workflow_dispatch:
     inputs:
       publish:
         description: "Really publish to Instagram? (true/false)"
         default: "false"
-concurrency: daily-post
+
+concurrency:
+  group: daily-instagram-post
+  cancel-in-progress: false
+
 permissions:
   contents: write
+
 jobs:
   post:
     runs-on: ubuntu-latest
     env:
       DO_PUBLISH: ${{ (github.event_name == 'schedule' && vars.ACTIVATED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish == 'true') }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: sudo apt-get update && sudo apt-get install -y fonts-freefont-ttf libraqm0 && pip install pillow
-      - run: python main.py prepare
-      - name: Commit image
+
+      - name: Install system dependencies & Python packages
         run: |
-          git config user.name "autoposter"
-          git config user.email "bot@users.noreply.github.com"
+          sudo apt-get update
+          sudo apt-get install -y libraqm0 fonts-freefont-ttf
+          python -m pip install --upgrade pip
+          pip install pillow requests
+
+      - name: Run prepare (Candidate selection, image render & quality verification)
+        run: python main.py prepare
+
+      - name: Commit generated image
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add images
-          git commit -m "image" || true
-          git push || true
-      - name: Publish
+          git commit -m "chore(image): generate daily image [skip ci]" || echo "No image changes to commit"
+          git pull --rebase origin main || true
+          git push origin main || true
+
+      - name: Publish to Instagram
         if: env.DO_PUBLISH == 'true'
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
         run: python main.py publish
-      - name: Save history
+
+      - name: Record history and update repository
         if: always() && env.DO_PUBLISH == 'true'
         run: |
           git add history.json
-          git commit -m "history" || true
-          git pull --rebase || true
-          git push || true
+          git commit -m "chore(history): record published post [skip ci]" || echo "No history changes to commit"
+          git pull --rebase origin main || true
+          git push origin main || true

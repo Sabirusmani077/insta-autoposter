@@ -38,7 +38,8 @@ class TestInstaAutoposter(unittest.TestCase):
         best_quote, score, count = select_best_candidate(self.quotes, self.history)
         self.assertIsNotNone(best_quote)
         self.assertGreater(score, 70.0, "Selected quote score should be above quality threshold")
-        self.assertEqual(count, 365)
+        expected_unposted = len(self.quotes) - len([h for h in self.history if h.get("status") == "published"])
+        self.assertEqual(count, expected_unposted)
 
     def test_image_rendering_specs(self):
         """Test image generation for correct dimensions (1080x1350) and file creation."""

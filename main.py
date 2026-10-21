@@ -187,29 +187,51 @@ def publish():
         sys.exit(1)
 
     repo = os.environ.get("GITHUB_REPOSITORY", "Sabirusmani077/insta-autoposter")
-    commit_sha = os.environ.get("GITHUB_SHA")
 
-    if commit_sha:
-        url = f"https://raw.githubusercontent.com/{repo}/{commit_sha}/{t['image']}"
-    else:
-        url = f"https://raw.githubusercontent.com/{repo}/main/{t['image']}"
+    # 1. Determine exact commit SHA containing the image file
+    image_sha = None
+    try:
+        import subprocess
+        out = subprocess.check_output(
+            ["git", "log", "-n", "1", "--format=%H", "--", t["image"]],
+            text=True,
+            cwd=ROOT
+        ).strip()
+        if out and len(out) == 40:
+            image_sha = out
+            print(f"Found image commit SHA: {image_sha}")
+    except Exception as ex:
+        print(f"Could not read git log for image: {ex}")
 
-    print(f"Checking image reachability at: {url}")
-    reachable = False
-    for attempt in range(8):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                if resp.status == 200:
-                    reachable = True
-                    print(f"Image is reachable (HTTP 200). Ready for Meta container creation.")
-                    break
-        except Exception:
-            print(f"Waiting for raw image CDN propagation (attempt {attempt+1}/8)...")
-            time.sleep(10)
+    # 2. Build candidate URLs to test (exact image SHA first, then main branch)
+    candidate_urls = []
+    if image_sha:
+        candidate_urls.append(f"https://raw.githubusercontent.com/{repo}/{image_sha}/{t['image']}")
+    candidate_urls.append(f"https://raw.githubusercontent.com/{repo}/main/{t['image']}")
 
-    if not reachable:
-        print("::warning::CDN reachability check timed out, attempting container creation anyway...")
+    print("Resolving verified public image URL for Meta container creation...")
+    valid_url = None
+    for attempt in range(12):
+        for candidate in candidate_urls:
+            try:
+                req = urllib.request.Request(candidate, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status == 200:
+                        valid_url = candidate
+                        print(f"Verified image URL reachable (HTTP 200): {valid_url}")
+                        break
+            except Exception:
+                continue
+        if valid_url:
+            break
+        print(f"Waiting for raw CDN propagation (attempt {attempt+1}/12)...")
+        time.sleep(5)
+
+    if not valid_url:
+        valid_url = candidate_urls[0]
+        print(f"::warning::CDN verification timed out, using fallback URL: {valid_url}")
+
+    url = valid_url
 
     base = "https://graph.instagram.com/v21.0"
     print("Step 1: Creating Instagram media container...")

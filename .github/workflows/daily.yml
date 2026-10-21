@@ -2,10 +2,12 @@ name: Daily Instagram Post
 
 on:
   schedule:
-    # Primary: 02:25 UTC = 07:55 AM IST (off-peak minute to prevent GitHub Actions dropped crons)
-    - cron: "25 2 * * *"
-    # Fallback backup: 03:10 UTC = 08:40 AM IST (backup run if GitHub delayed the first run; duplicate-blocked automatically)
-    - cron: "10 3 * * *"
+    # Primary: 02:20 UTC = 07:50 AM IST (starts 10m early to beat runner queue delays so post goes live by 8:00 AM IST)
+    - cron: "20 2 * * *"
+    # Fail-safe Backup 1: 02:45 UTC = 08:15 AM IST (runs if 7:50 AM runner was delayed; duplicate-blocked automatically)
+    - cron: "45 2 * * *"
+    # Fail-safe Backup 2: 03:15 UTC = 08:45 AM IST (final safety net)
+    - cron: "15 3 * * *"
   workflow_dispatch:
     inputs:
       publish:

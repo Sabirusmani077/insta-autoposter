@@ -6,3 +6,4 @@ today.json
 .env.local
 .vscode/
 .idea/
+trigger.log

@@ -2,12 +2,16 @@ name: Daily Instagram Post
 
 on:
   schedule:
-    - cron: '15 2 * * *'
-    - cron: '35 2 * * *'
-    - cron: '55 2 * * *'
-    - cron: '15 3 * * *'
-    - cron: '35 3 * * *'
-    - cron: '55 3 * * *'
+    # Continuous morning schedule (from 6:30 AM to 9:30 AM IST)
+    # Starts early so GitHub runner queue delays never push posts into the afternoon
+    - cron: '0 1 * * *'   # 06:30 AM IST
+    - cron: '25 1 * * *'  # 06:55 AM IST
+    - cron: '50 1 * * *'  # 07:20 AM IST
+    - cron: '15 2 * * *'  # 07:45 AM IST
+    - cron: '40 2 * * *'  # 08:10 AM IST
+    - cron: '05 3 * * *'  # 08:35 AM IST
+    - cron: '30 3 * * *'  # 09:00 AM IST
+    - cron: '00 4 * * *'  # 09:30 AM IST
   workflow_dispatch:
     inputs:
       publish:
@@ -32,12 +36,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fast check if already published today
+        id: precheck
+        run: |
+          TODAY=$(date -u -d "+5 hours 30 minutes" +%Y-%m-%d || python3 -c "import datetime; print((datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=5, minutes=30)).date().isoformat())")
+          echo "Target IST date: $TODAY"
+          if grep -q "\"date\": \"$TODAY\"" history.json && grep -q "\"status\": \"published\"" history.json; then
+            echo "Already published for today ($TODAY). Skipping pipeline."
+            echo "ALREADY_DONE=true" >> $GITHUB_ENV
+          else
+            echo "Not yet published for today ($TODAY). Proceeding with post pipeline."
+            echo "ALREADY_DONE=false" >> $GITHUB_ENV
+          fi
+
       - name: Set up Python 3.12
+        if: env.ALREADY_DONE != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install system dependencies & Python packages
+        if: env.ALREADY_DONE != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libraqm0 fonts-freefont-ttf
@@ -45,9 +64,11 @@ jobs:
           pip install pillow requests
 
       - name: Run prepare (Candidate selection, image render & quality verification)
+        if: env.ALREADY_DONE != 'true'
         run: python main.py prepare
 
       - name: Commit generated image
+        if: env.ALREADY_DONE != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -57,7 +78,7 @@ jobs:
           git push origin main || true
 
       - name: Publish to Instagram
-        if: env.DO_PUBLISH == 'true'
+        if: env.ALREADY_DONE != 'true' && env.DO_PUBLISH == 'true'
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
@@ -65,7 +86,7 @@ jobs:
         run: python main.py publish
 
       - name: Record history and update repository
-        if: always() && env.DO_PUBLISH == 'true'
+        if: always() && env.ALREADY_DONE != 'true' && env.DO_PUBLISH == 'true'
         run: |
           git add history.json
           git commit -m "chore(history): record published post [skip ci]" || echo "No history changes to commit"

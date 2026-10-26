@@ -1,6 +1,5 @@
-import os, sys, random, math, asyncio, subprocess
+import os, sys, random, math, subprocess
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops
-import edge_tts
 import imageio_ffmpeg
 
 # Ensure UTF-8 printing
@@ -191,66 +190,31 @@ def render_reel_cover(qid, tag, lines, out_path):
     print(f"Rendered Reel cover frame: {out_path} ({W}x{H})")
     return out_path
 
-async def generate_speech_async(text, out_mp3):
-    comm = edge_tts.Communicate(text, "hi-IN-MadhurNeural", rate="-4%")
-    await comm.save(out_mp3)
-
-def generate_audio(tag, lines, out_mp3):
-    text = f"{tag}। " + " ".join(lines)
-    try:
-        print("Synthesizing Hindi speech via edge-tts (hi-IN-MadhurNeural)...")
-        asyncio.run(generate_speech_async(text, out_mp3))
-        if os.path.exists(out_mp3) and os.path.getsize(out_mp3) > 1000:
-            print(f"Speech audio generated: {out_mp3} ({os.path.getsize(out_mp3)} bytes)")
-            return out_mp3
-    except Exception as e:
-        print(f"::warning::edge-tts synthesis failed ({e}). Falling back to synthesized ambient tone.")
-
-    # Fallback: Synthesize a soothing warm ambient chime with ffmpeg
-    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-    cmd = [
-        ffmpeg_exe, "-y",
-        "-f", "lavfi", "-i", "sine=f=220:r=44100",
-        "-af", "volume=0.15,lowpass=f=380,afade=t=in:ss=0:d=2,afade=t=out:st=12:d=2",
-        "-t", "14",
-        "-c:a", "aac",
-        out_mp3
-    ]
-    subprocess.check_call(cmd)
-    print(f"Generated fallback ambient audio: {out_mp3}")
-    return out_mp3
-
-def build_reel_video(frame_img, audio_path, out_mp4):
+def build_silent_reel_video(frame_img, out_mp4, duration=9):
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
-    # Determine audio duration
-    p = subprocess.run([ffmpeg_exe, "-i", audio_path, "-f", "null", "-"], stderr=subprocess.PIPE, text=True)
-    dur = 14.0
-    for line in p.stderr.splitlines():
-        if "Duration" in line:
-            try:
-                parts = line.split("Duration:")[1].split(",")[0].strip().split(":")
-                dur = float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
-            except Exception:
-                pass
-            break
-
-    total_dur = math.ceil(dur + 1.5)
+    # Total duration for silent reading (9 seconds optimal for 4-line poetry)
     # Reels must be at least 5 seconds, max 90 seconds
-    total_dur = max(6, min(80, total_dur))
-    print(f"Audio duration: {dur:.1f}s | Target Reel duration: {total_dur}s")
+    duration = max(6, min(80, duration))
+    print(f"Building silent Reel video (Duration: {duration}s)...")
 
-    # Gentle cinematic Ken Burns zoom (1.0 to 1.05)
+    # Gentle cinematic Ken Burns zoom (1.0 to 1.05) over the duration
+    total_frames = duration * 30
     vf = (
         f"zoompan=z='min(zoom+0.0004,1.05)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-        f"d={total_dur * 30}:s=1080x1920:fps=30"
+        f"d={total_frames}:s=1080x1920:fps=30"
     )
 
+    # Note: Meta Graph API strictly requires an audio stream in the container,
+    # otherwise container transcoding fails with error 2207026/2207076.
+    # We provide a completely silent AAC stereo track (anullsrc) so the video
+    # plays with ZERO sound to viewers, while complying with Meta's container specs.
     cmd = [
         ffmpeg_exe, "-y",
         "-loop", "1",
         "-i", frame_img,
-        "-i", audio_path,
+        "-f", "lavfi",
+        "-i", "anullsrc=r=48000:cl=stereo",
         "-vf", vf,
         "-c:v", "libx264",
         "-tune", "stillimage",
@@ -259,37 +223,28 @@ def build_reel_video(frame_img, audio_path, out_mp4):
         "-crf", "22",
         "-c:a", "aac",
         "-b:a", "128k",
-        "-t", str(total_dur),
+        "-ac", "2",
+        "-ar", "48000",
+        "-t", str(duration),
+        "-shortest",
         "-movflags", "+faststart",
         out_mp4
     ]
 
     subprocess.check_call(cmd)
     size_mb = os.path.getsize(out_mp4) / (1024 * 1024)
-    print(f"Successfully compiled Reel MP4: {out_mp4} ({size_mb:.2f} MB)")
-    return out_mp4, total_dur
+    print(f"Successfully compiled Silent Reel MP4: {out_mp4} ({size_mb:.2f} MB, {duration}s)")
+    return out_mp4, duration
 
-def render_reel(qid, tag, lines, out_video_path, out_cover_path):
+def render_reel(qid, tag, lines, out_video_path, out_cover_path, duration=9):
     os.makedirs(os.path.dirname(os.path.abspath(out_video_path)), exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(out_cover_path)), exist_ok=True)
 
-    temp_audio = os.path.join(ROOT, "temp_reel_audio.mp3")
-
-    # 1. Render cover & base visual frame
+    # 1. Render cover & base visual frame (1080x1920)
     render_reel_cover(qid, tag, lines, out_cover_path)
 
-    # 2. Synthesize audio
-    generate_audio(tag, lines, temp_audio)
-
-    # 3. Compile MP4 video
-    build_reel_video(out_cover_path, temp_audio, out_video_path)
-
-    # 4. Cleanup temporary audio file
-    if os.path.exists(temp_audio):
-        try:
-            os.remove(temp_audio)
-        except Exception:
-            pass
+    # 2. Compile silent MP4 video with smooth Ken Burns zoom
+    build_silent_reel_video(out_cover_path, out_video_path, duration=duration)
 
     return out_video_path, out_cover_path
 

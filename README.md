@@ -1,6 +1,6 @@
 # Instagram Reels Auto-Publisher (@sabir_usmani_077)
 
-Fully automated, production-grade Instagram Reels publishing system. Generates original Hindi motivational poetry and life lessons, renders 1080×1920 9:16 vertical videos with Hindi voice narration and cinematic motion, selects the highest-scoring candidate automatically, and publishes to Instagram Reels every morning at **8:00 AM IST (02:30 UTC)**.
+Fully automated, production-grade Instagram Reels publishing system. Generates original Hindi motivational poetry and life lessons, renders 1080×1920 9:16 vertical silent videos with cinematic Ken Burns motion, selects the highest-scoring candidate automatically, and publishes to Instagram Reels every morning at **8:00 AM IST (02:30 UTC)**.
 
 ---
 
@@ -23,16 +23,15 @@ flowchart TD
     C --> D["Filter unposted from history.json (365 quote bank)"]
     D --> E["Quality Scoring: Rhyme, Balance, Freshness (0-100)"]
     E --> F["Render 1080x1920 Cover Image (render_reel.py)"]
-    F --> G["Synthesize Hindi Speech Narration (edge-tts)"]
-    G --> H["Compile H.264/AAC Reel Video with Ken Burns Zoom (ffmpeg)"]
-    H --> I["Commit videos/YYYY-MM-DD.mp4 & images/YYYY-MM-DD.jpg to Git"]
-    I --> J{"Is Publishing Active? (publish == true)"}
-    J -- No (Dry Run) --> K["Finish safely without Instagram API call"]
-    J -- Yes --> L["Wait for raw GitHub video & cover CDN propagation"]
-    L --> M["Meta Graph API: POST /{ig-user-id}/media (media_type=REELS)"]
-    M --> N["Poll Container Status (FINISHED)"]
-    N --> O["Meta Graph API: POST /{ig-user-id}/media_publish"]
-    O --> P["Save post record into history.json & Commit to Git"]
+    F --> G["Compile Silent 1080x1920 Reel Video with Ken Burns Zoom (ffmpeg)"]
+    G --> H["Commit videos/YYYY-MM-DD.mp4 & images/YYYY-MM-DD.jpg to Git"]
+    H --> I{"Is Publishing Active? (publish == true)"}
+    I -- No (Dry Run) --> J["Finish safely without Instagram API call"]
+    I -- Yes --> K["Wait for raw GitHub video & cover CDN propagation"]
+    K --> L["Meta Graph API: POST /{ig-user-id}/media (media_type=REELS)"]
+    L --> M["Poll Container Status (FINISHED)"]
+    M --> N["Meta Graph API: POST /{ig-user-id}/media_publish"]
+    N --> O["Save post record into history.json & Commit to Git"]
 ```
 
 ---
@@ -41,8 +40,8 @@ flowchart TD
 
 * **Resolution:** 1080 × 1920 pixels (9:16 vertical portrait)
 * **Video Codec:** H.264 (`yuv420p`, CRF 22, 30 fps) with `-movflags +faststart`
-* **Audio Track:** AAC 128 kbps stereo, natural Hindi neural voice narration (`hi-IN-MadhurNeural`)
-* **Duration:** 10 to 18 seconds (optimal for high Instagram Reel loop completion rate)
+* **Audio Track:** Silent AAC stereo stream (compliant with Meta container requirements while playing with zero sound)
+* **Duration:** 9 seconds (optimal for silent poetry reading and Instagram loop completion)
 * **Safe Zone:** Text and watermarks strictly positioned within the central safe area (Y: 230 to 1500) to avoid overlay by Instagram's UI icons and bottom captions.
 
 ---

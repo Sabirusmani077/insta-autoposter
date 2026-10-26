@@ -40,8 +40,8 @@ flowchart TD
 
 * **Resolution:** 1080 × 1920 pixels (9:16 vertical portrait)
 * **Video Codec:** H.264 (`yuv420p`, CRF 22, 30 fps) with `-movflags +faststart`
-* **Audio Track:** Silent AAC stereo stream (compliant with Meta container requirements while playing with zero sound)
-* **Duration:** 9 seconds (optimal for silent poetry reading and Instagram loop completion)
+* **Audio Track:** Viral Motivational "Comeback" BGM / Trap Beat (AAC 192 kbps stereo, smooth fade-in/fade-out, zero voiceover)
+* **Duration:** 11 seconds (optimal for beat drop, poetry reading, and Instagram loop completion)
 * **Safe Zone:** Text and watermarks strictly positioned within the central safe area (Y: 230 to 1500) to avoid overlay by Instagram's UI icons and bottom captions.
 
 ---

@@ -39,10 +39,27 @@ flowchart TD
 ## 🎬 Reel Specifications
 
 * **Resolution:** 1080 × 1920 pixels (9:16 vertical portrait)
-* **Video Codec:** H.264 (`yuv420p`, CRF 22, 30 fps) with `-movflags +faststart`
-* **Audio Track:** Viral Motivational "Comeback" BGM / Trap Beat (AAC 192 kbps stereo, smooth fade-in/fade-out, zero voiceover)
-* **Duration:** 11 seconds (optimal for beat drop, poetry reading, and Instagram loop completion)
-* **Safe Zone:** Text and watermarks strictly positioned within the central safe area (Y: 230 to 1500) to avoid overlay by Instagram's UI icons and bottom captions.
+* **Video Codec:** H.264 (`yuv420p`, CRF 22, 30 fps) with cinematic Ken Burns slow zoom and `-movflags +faststart`
+* **Audio Track:** 100% Completely Silent (Silent AAC stereo stream `anullsrc=r=48000:cl=stereo` at 128 kbps to satisfy Meta Graph API ingestion pipeline while playing with 0 dB absolute silence to viewers on Instagram)
+* **Background Diversity:** 16 Daily Unique & Distinct Procedural Background Themes:
+  1. *Midnight Mountain Silhouette & Glowing Moon*
+  2. *Desert Dunes & Radiant Setting Sun*
+  3. *Cosmic Galaxy Nebula & Twinkling Cross Stars*
+  4. *Synthwave Retro Horizon Perspective Grid*
+  5. *Misty Pine Forest Silhouette & Rising Mist*
+  6. *Sunset Ocean Water & Shimmering Horizon Reflections*
+  7. *Obsidian Charcoal & Luxury Art Deco Gold*
+  8. *Nordic Aurora Borealis Light Curtains*
+  9. *Volcanic Twilight & Rising Amber Embers*
+  10. *Dreamy Translucent Luminous Bokeh Orbs*
+  11. *Celestial Planet & Sweeping Concentric Rings*
+  12. *Sacred Starburst Mandala & Radial Compass*
+  13. *Autumn Twilight & Silhouette Branch Foliage*
+  14. *Glacier Frost & Geometric Crystalline Shards*
+  15. *Zen Bamboo Garden & Serene Full Moon*
+  16. *Vibrant Sunset God Rays & Twilight Clouds*
+* **Duration:** 10 seconds (optimal for comfortable silent reading, high retention, and seamless loop completion)
+* **Safe Zone:** Hindi couplets, badges, and watermark strictly positioned within the central safe area (Y: 230 to 1500) with deep multi-layer drop shadows for crystal-clear readability over every background style.
 
 ---
 

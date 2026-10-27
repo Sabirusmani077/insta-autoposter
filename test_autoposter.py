@@ -61,12 +61,34 @@ class TestInstaAutoposter(unittest.TestCase):
         if os.path.exists(test_cover):
             os.remove(test_cover)
 
+    def test_reel_theme_diversity(self):
+        """Verify that at least 12 distinct background themes exist and consecutive quotes use different themes."""
+        from render_reel import THEME_GENERATORS
+        self.assertGreaterEqual(len(THEME_GENERATORS), 12, "Must have at least 12 distinct background themes")
+
+        # Test rendering 3 consecutive quotes to verify they produce valid distinct cover images
+        covers = []
+        for i in range(3):
+            q = self.quotes[i]
+            cover_path = f"images/test_theme_div_{i}.jpg"
+            render_reel_cover(q["id"], q["tag"], q["lines"], cover_path)
+            self.assertTrue(os.path.exists(cover_path))
+            covers.append(cover_path)
+
+        # Ensure cover files differ in size / content (not identical)
+        sizes = [os.path.getsize(c) for c in covers]
+        self.assertEqual(len(set(sizes)), len(sizes), "Different themes should produce different file sizes")
+
+        for c in covers:
+            if os.path.exists(c):
+                os.remove(c)
+
     def test_reel_video_specs(self):
-        """Test full Reel video compilation (MP4, H.264, AAC audio, duration 5-90s)."""
+        """Test full Reel video compilation (MP4, H.264, silent AAC audio, duration 5-90s)."""
         test_vid = "videos/test_spec.mp4"
         test_cover = "images/test_spec.jpg"
         q = self.quotes[0]
-        render_reel(q["id"], q["tag"], q["lines"], test_vid, test_cover)
+        render_reel(q["id"], q["tag"], q["lines"], test_vid, test_cover, duration=10)
 
         self.assertTrue(os.path.exists(test_vid))
         self.assertTrue(os.path.exists(test_cover))

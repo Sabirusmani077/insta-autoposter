@@ -40,7 +40,7 @@ flowchart TD
 
 * **Resolution:** 1080 × 1920 pixels (9:16 vertical portrait)
 * **Video Codec:** H.264 (`yuv420p`, CRF 22, 30 fps) with cinematic Ken Burns slow zoom and `-movflags +faststart`
-* **Audio Track:** 100% Completely Silent (Silent AAC stereo stream `anullsrc=r=48000:cl=stereo` at 128 kbps to satisfy Meta Graph API ingestion pipeline while playing with 0 dB absolute silence to viewers on Instagram)
+* **Audio Track:** Cinematic Motivational Music — *"Epic Inspiration"* by AShamaluevMusic (from [YouTube Short Lf_Q6B0Ewq8](https://www.youtube.com/shorts/Lf_Q6B0Ewq8)) in high-quality AAC 192 kbps stereo with smooth 0.5s fade-in and 1.5s fade-out
 * **Background Diversity:** 16 Daily Unique & Distinct Procedural Background Themes:
   1. *Midnight Mountain Silhouette & Glowing Moon*
   2. *Desert Dunes & Radiant Setting Sun*
@@ -58,7 +58,7 @@ flowchart TD
   14. *Glacier Frost & Geometric Crystalline Shards*
   15. *Zen Bamboo Garden & Serene Full Moon*
   16. *Vibrant Sunset God Rays & Twilight Clouds*
-* **Duration:** 10 seconds (optimal for comfortable silent reading, high retention, and seamless loop completion)
+* **Duration:** 11 seconds (optimal for beat progression, poetry reading, high retention, and seamless loop completion)
 * **Safe Zone:** Hindi couplets, badges, and watermark strictly positioned within the central safe area (Y: 230 to 1500) with deep multi-layer drop shadows for crystal-clear readability over every background style.
 
 ---

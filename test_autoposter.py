@@ -84,7 +84,7 @@ class TestInstaAutoposter(unittest.TestCase):
                 os.remove(c)
 
     def test_reel_video_specs(self):
-        """Test full Reel video compilation (MP4, H.264, silent AAC audio, duration 5-90s)."""
+        """Test full Reel video compilation (MP4, H.264, AAC audio with background music, duration 5-90s)."""
         test_vid = "videos/test_spec.mp4"
         test_cover = "images/test_spec.jpg"
         q = self.quotes[0]

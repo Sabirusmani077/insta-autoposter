@@ -19,6 +19,9 @@ FB_PATH = os.path.join(FONTS_DIR, "NotoSansDevanagari-Bold.ttf")
 FR_PATH = os.path.join(FONTS_DIR, "NotoSansDevanagari-Regular.ttf")
 FL_PATH = os.path.join(FONTS_DIR, "Roboto-Regular.ttf")
 
+AUDIO_DIR = os.path.join(ROOT, "audio")
+BGM_AUDIO = os.path.join(AUDIO_DIR, "bgm.mp3")
+
 WATERMARK = "@sabir_usmani_077"
 
 def get_font(path, size):
@@ -472,10 +475,10 @@ def render_reel_cover(qid, tag, lines, out_path):
     print(f"Rendered Reel cover frame [Theme #{theme_idx}]: {out_path} ({W}x{H})")
     return out_path
 
-def build_reel_video(frame_img, out_mp4, duration=10):
+def build_reel_video(frame_img, out_mp4, audio_file=None, duration=11):
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
-    # Total duration: 10 seconds (optimal for silent Reel reading & loop completion)
+    # Total duration: 11 seconds (optimal for Reel loop completion & reading)
     duration = max(6, min(80, duration))
     total_frames = duration * 30
 
@@ -485,47 +488,81 @@ def build_reel_video(frame_img, out_mp4, duration=10):
         f"d={total_frames}:s=1080x1920:fps=30"
     )
 
-    # PURE SILENT AUDIO TRACK: Zero sound, zero voiceover, zero music.
-    # Meta Graph API strictly requires an audio track for media_type=REELS;
-    # injecting an explicit silent AAC stream satisfies Meta's ingestion pipeline
-    # with 100% complete silence to viewers on Instagram.
-    print(f"Building Reel video with 100% silent audio track (Duration: {duration}s)...")
-    cmd = [
-        ffmpeg_exe, "-y",
-        "-loop", "1",
-        "-i", frame_img,
-        "-f", "lavfi",
-        "-i", "anullsrc=r=48000:cl=stereo",
-        "-vf", vf,
-        "-c:v", "libx264",
-        "-tune", "stillimage",
-        "-pix_fmt", "yuv420p",
-        "-preset", "medium",
-        "-crf", "22",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-ac", "2",
-        "-ar", "48000",
-        "-t", str(duration),
-        "-shortest",
-        "-movflags", "+faststart",
-        out_mp4
-    ]
+    if audio_file and os.path.exists(audio_file) and os.path.getsize(audio_file) > 1000:
+        print(f"Building Reel video with background music: {audio_file} (Duration: {duration}s)...")
+        # Audio fade in at start (0.5s), fade out at end (1.5s), balanced volume
+        af = f"afade=t=in:ss=0:d=0.5,afade=t=out:st={duration - 1.5}:d=1.5,volume=0.95"
+        cmd = [
+            ffmpeg_exe, "-y",
+            "-loop", "1",
+            "-i", frame_img,
+            "-stream_loop", "-1",
+            "-i", audio_file,
+            "-vf", vf,
+            "-af", af,
+            "-c:v", "libx264",
+            "-tune", "stillimage",
+            "-pix_fmt", "yuv420p",
+            "-preset", "medium",
+            "-crf", "22",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-ac", "2",
+            "-ar", "48000",
+            "-t", str(duration),
+            "-shortest",
+            "-movflags", "+faststart",
+            out_mp4
+        ]
+    else:
+        print(f"Building Reel video with silent audio track fallback (Duration: {duration}s)...")
+        cmd = [
+            ffmpeg_exe, "-y",
+            "-loop", "1",
+            "-i", frame_img,
+            "-f", "lavfi",
+            "-i", "anullsrc=r=48000:cl=stereo",
+            "-vf", vf,
+            "-c:v", "libx264",
+            "-tune", "stillimage",
+            "-pix_fmt", "yuv420p",
+            "-preset", "medium",
+            "-crf", "22",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-ac", "2",
+            "-ar", "48000",
+            "-t", str(duration),
+            "-shortest",
+            "-movflags", "+faststart",
+            out_mp4
+        ]
 
     subprocess.check_call(cmd)
     size_mb = os.path.getsize(out_mp4) / (1024 * 1024)
-    print(f"Successfully compiled Silent Reel MP4: {out_mp4} ({size_mb:.2f} MB, {duration}s)")
+    print(f"Successfully compiled Reel MP4: {out_mp4} ({size_mb:.2f} MB, {duration}s)")
     return out_mp4, duration
 
-def render_reel(qid, tag, lines, out_video_path, out_cover_path, duration=10):
+def render_reel(qid, tag, lines, out_video_path, out_cover_path, duration=11):
     os.makedirs(os.path.dirname(os.path.abspath(out_video_path)), exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(out_cover_path)), exist_ok=True)
 
     # 1. Render cover & base visual frame with daily unique procedural background
     render_reel_cover(qid, tag, lines, out_cover_path)
 
-    # 2. Compile 100% silent Reel MP4 video with Ken Burns zoom
-    build_reel_video(out_cover_path, out_video_path, duration=duration)
+    # 2. Check for background music (Epic Inspiration / BGM)
+    bg_audio = None
+    for candidate in [
+        BGM_AUDIO,
+        os.path.join(AUDIO_DIR, "bgm.mp3"),
+        os.path.join(AUDIO_DIR, "epic_inspiration.mp3")
+    ]:
+        if os.path.exists(candidate) and os.path.getsize(candidate) > 1000:
+            bg_audio = candidate
+            break
+
+    # 3. Compile Reel MP4 video with Ken Burns zoom and background music
+    build_reel_video(out_cover_path, out_video_path, audio_file=bg_audio, duration=duration)
 
     return out_video_path, out_cover_path
 

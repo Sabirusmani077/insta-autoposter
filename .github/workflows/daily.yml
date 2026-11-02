@@ -2,16 +2,19 @@ name: Daily Instagram Reel
 
 on:
   schedule:
-    # Continuous morning schedule (from 6:30 AM to 9:30 AM IST)
-    # Starts early so GitHub runner queue delays never push posts into the afternoon
-    - cron: '0 1 * * *'   # 06:30 AM IST
-    - cron: '25 1 * * *'  # 06:55 AM IST
-    - cron: '50 1 * * *'  # 07:20 AM IST
-    - cron: '15 2 * * *'  # 07:45 AM IST
-    - cron: '40 2 * * *'  # 08:10 AM IST
-    - cron: '05 3 * * *'  # 08:35 AM IST
-    - cron: '30 3 * * *'  # 09:00 AM IST
-    - cron: '00 4 * * *'  # 09:30 AM IST
+    # High-reliability morning queue using non-congested offset minutes
+    # Starts at 06:07 AM IST (00:37 UTC) to absorb GitHub runner queue delays
+    - cron: '37 0 * * *'  # 06:07 AM IST
+    - cron: '03 1 * * *'  # 06:33 AM IST
+    - cron: '23 1 * * *'  # 06:53 AM IST
+    - cron: '47 1 * * *'  # 07:17 AM IST
+    - cron: '07 2 * * *'  # 07:37 AM IST
+    - cron: '27 2 * * *'  # 07:57 AM IST
+    - cron: '47 2 * * *'  # 08:17 AM IST
+    - cron: '07 3 * * *'  # 08:37 AM IST
+    - cron: '27 3 * * *'  # 08:57 AM IST
+    - cron: '47 3 * * *'  # 09:17 AM IST
+    - cron: '07 4 * * *'  # 09:37 AM IST
   workflow_dispatch:
     inputs:
       publish:

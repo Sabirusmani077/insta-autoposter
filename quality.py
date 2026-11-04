@@ -132,12 +132,61 @@ def score_candidate(q, history):
     total_score = balance_score + freshness_score + rhyme_score + keyword_score + readability_score
     return round(total_score, 2)
 
+def is_duplicate_or_too_similar(candidate, published_quotes):
+    """
+    Checks if a candidate quote is an exact duplicate, shares lines,
+    or has excessive vocabulary overlap with any already published quote.
+    Returns (is_duplicate: bool, reason: str)
+    """
+    cand_lines = candidate.get("lines", [])
+    if not cand_lines:
+        return True, "Candidate has no lines"
+
+    def clean_str(s):
+        return re.sub(r"[\s\.,।!?'\"—\-]+", "", s)
+
+    cand_norm_full = clean_str(" ".join(cand_lines))
+    cand_norm_lines = {clean_str(l) for l in cand_lines if clean_str(l)}
+    cand_words = set(re.findall(r"[\u0900-\u097F]+", " ".join(cand_lines)))
+
+    for pub in published_quotes:
+        pub_lines = pub.get("lines", [])
+        if not pub_lines:
+            continue
+        pub_id = pub.get("id")
+
+        # 1. Full text normalized match
+        pub_norm_full = clean_str(" ".join(pub_lines))
+        if cand_norm_full == pub_norm_full:
+            return True, f"Exact normalized full text matches published quote {pub_id}"
+
+        # 2. Shared lines check (reject if any line matches)
+        pub_norm_lines = {clean_str(l) for l in pub_lines if clean_str(l)}
+        shared_lines = cand_norm_lines.intersection(pub_norm_lines)
+        if len(shared_lines) >= 1:
+            return True, f"Shares {len(shared_lines)} line(s) with published quote {pub_id}"
+
+        # 3. Vocabulary overlap (Jaccard similarity >= 60%)
+        pub_words = set(re.findall(r"[\u0900-\u097F]+", " ".join(pub_lines)))
+        if cand_words and pub_words:
+            overlap = len(cand_words.intersection(pub_words))
+            union = len(cand_words.union(pub_words))
+            similarity = overlap / union if union > 0 else 0
+            if similarity >= 0.60:
+                return True, f"High vocabulary overlap ({similarity:.1%}) with published quote {pub_id}"
+
+    return False, "Unique"
+
 def select_best_candidate(quotes, history):
     """
-    Selects the highest quality valid candidate that has not been posted yet.
+    Selects the highest quality valid candidate that has not been posted yet
+    and has no content duplication with published history.
     Returns (selected_quote, score, evaluated_candidates_count)
     """
     used_ids = {h.get("id") for h in history if h.get("status") == "published"}
+    quotes_by_id = {q.get("id"): q for q in quotes if isinstance(q, dict) and "id" in q}
+    published_quotes = [quotes_by_id[qid] for qid in used_ids if qid in quotes_by_id]
+    
     unposted = [q for q in quotes if q.get("id") not in used_ids]
     
     if not unposted:
@@ -148,6 +197,12 @@ def select_best_candidate(quotes, history):
         is_valid, reason = validate_quote(q)
         if not is_valid:
             continue
+        
+        # Deduplication safeguard: block quotes that duplicate or share lines with published history
+        is_dup, dup_reason = is_duplicate_or_too_similar(q, published_quotes)
+        if is_dup:
+            continue
+            
         score = score_candidate(q, history)
         scored_candidates.append((score, q))
     
@@ -157,3 +212,4 @@ def select_best_candidate(quotes, history):
     scored_candidates.sort(key=lambda x: x[0], reverse=True)
     best_score, best_quote = scored_candidates[0]
     return best_quote, best_score, len(scored_candidates)
+

@@ -3,7 +3,7 @@ import json
 import unittest
 from PIL import Image
 
-from quality import validate_quote, score_candidate, select_best_candidate
+from quality import validate_quote, score_candidate, select_best_candidate, is_duplicate_or_too_similar
 from render import render, WATERMARK as WATERMARK_FEED
 from render_reel import render_reel, render_reel_cover, WATERMARK as WATERMARK_REEL, W as REEL_W, H as REEL_H
 import main
@@ -114,5 +114,89 @@ class TestInstaAutoposter(unittest.TestCase):
         finally:
             main.save("history.json", self.history)
 
+    def test_quotes_content_uniqueness(self):
+        """Verify that all unposted quotes in quotes.json are 100% unique in full text and lines."""
+        import re
+        def clean_line(l):
+            return re.sub(r"[\s\.,।!?'\"—\-]+", "", l)
+
+        pub_ids = {h.get("id") for h in self.history if h.get("status") == "published"}
+        unposted = [q for q in self.quotes if q.get("id") not in pub_ids]
+        published = [q for q in self.quotes if q.get("id") in pub_ids]
+
+        # 1. Full-text uniqueness among unposted quotes
+        seen_texts = set()
+        for q in unposted:
+            norm_text = clean_line(" ".join(q.get("lines", [])))
+            self.assertNotIn(norm_text, seen_texts, f"Quote ID {q['id']} has duplicate full text")
+            seen_texts.add(norm_text)
+
+        # 2. Line uniqueness among unposted quotes
+        line_to_quote = {}
+        for q in unposted:
+            for line in q.get("lines", []):
+                cl = clean_line(line)
+                self.assertNotIn(cl, line_to_quote, f"Quote ID {q['id']} shares line '{line}' with Quote ID {line_to_quote.get(cl)}")
+                line_to_quote[cl] = q["id"]
+
+        # 3. No unposted quote shares any line with any published quote
+        pub_lines = {clean_line(l): q["id"] for q in published for l in q.get("lines", [])}
+        for q in unposted:
+            for line in q.get("lines", []):
+                cl = clean_line(line)
+                self.assertNotIn(cl, pub_lines, f"Unposted Quote ID {q['id']} shares line '{line}' with Published Quote ID {pub_lines.get(cl)}")
+
+    def test_candidate_selection_blocks_duplicate_content(self):
+        """Verify that is_duplicate_or_too_similar blocks duplicate lines, exact text, and vocabulary overlap."""
+        pub_ids = {h.get("id") for h in self.history if h.get("status") == "published"}
+        published = [q for q in self.quotes if q.get("id") in pub_ids]
+        self.assertTrue(len(published) > 0, "Should have published quotes to test against")
+
+        first_pub = published[0]
+
+        # Test A: Exact duplicate of a published quote
+        dup_candidate = {
+            "id": 9999,
+            "tag": first_pub["tag"],
+            "lines": list(first_pub["lines"])
+        }
+        is_dup, reason = is_duplicate_or_too_similar(dup_candidate, published)
+        self.assertTrue(is_dup, "Exact duplicate quote must be flagged as duplicate")
+
+        # Test B: Quote sharing even 1 line with a published quote
+        shared_line_candidate = {
+            "id": 9998,
+            "tag": "नया",
+            "lines": [
+                first_pub["lines"][0],
+                "यह एक नई और अलग लाइन है जो पहले कभी नहीं लिखी गई,",
+                "इस लाइन का उद्देश्य केवल टेस्ट करना है मेरे दोस्त,",
+                "और यह आख़िरी लाइन भी बिल्कुल नई और अनोखी है।"
+            ]
+        }
+        is_dup, reason = is_duplicate_or_too_similar(shared_line_candidate, published)
+        self.assertTrue(is_dup, "Candidate sharing a line with published quote must be flagged as duplicate")
+
+        # Test C: Truly unique candidate
+        unique_candidate = {
+            "id": 9997,
+            "tag": "विलक्षण",
+            "lines": [
+                "अनोखी सुबह का अनोखा सवेरा आया है आज,",
+                "हर परिंदे के सिर पर सफलता का नया ताज,",
+                "जो लगन से अपने हुनर को तराशता चला जाए,",
+                "उसी के कदमों में झुक जाता है यह सारा समाज।"
+            ]
+        }
+        is_dup, reason = is_duplicate_or_too_similar(unique_candidate, published)
+        self.assertFalse(is_dup, "Unique quote must not be flagged as duplicate")
+
+        # Test D: select_best_candidate ignores duplicate quotes even if injected
+        test_quotes = self.quotes + [dup_candidate]
+        selected_quote, score, count = select_best_candidate(test_quotes, self.history)
+        self.assertIsNotNone(selected_quote)
+        self.assertNotEqual(selected_quote["id"], 9999, "select_best_candidate must never pick duplicate candidate")
+
 if __name__ == "__main__":
     unittest.main()
+

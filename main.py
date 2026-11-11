@@ -10,7 +10,7 @@ except Exception:
     pass
 
 from PIL import Image
-from render_reel import render_reel
+from render_reel import render_reel, get_daily_bgm
 from render import render
 from quality import select_best_candidate, validate_quote
 
@@ -18,24 +18,24 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 P = lambda f: os.path.join(ROOT, f)
 
 CAPTIONS = [
-    "आज का दिन आपका है। इसे पूरी ताक़त और लगन से जिएँ। 💪",
-    "जिसे आज ये हौसला पढ़ने की ज़रूरत हो, उसे ज़रूर भेजें। ❤️",
-    "एक शब्द या एक लाइन में बताइए, आज आपका लक्ष्य क्या है? 👇",
-    "इसे सेव कर लें, जब भी हिम्मत टूटने लगे तब इसे पढ़ना। 🔖",
-    "छोटा क़दम भी क़दम होता है, मंज़िल तक पहुँचने के लिए चलते रहिए। 🌱",
-    "आप कितना भी थकें हों, हार मानकर रुकना विकल्प नहीं है। 🔥",
-    "आज ख़ुद से एक सच्चा वादा कीजिए और उसे हर हाल में निभाइए। ✅",
-    "कौन सी पंक्ति आपके दिल को सबसे ज़्यादा छू गई? कमेंट में लिखें। 💬",
-    "अपने उस सच्चे दोस्त को शेयर करें जो कभी मुश्किलों से हार नहीं मानता। 🤝",
-    "सब्र और अनुशासन रखिए, सच्ची मेहनत हमेशा रंग लाती है। 🌅",
+    "ग़ालिब और जौन के लफ़्ज़ सीधे रूह में उतरते हैं... 🖤",
+    "कौन सी पंक्ति आपके दिल को सबसे ज़्यादा छू गई? कमेंट में लिखें। ✒️",
+    "शायरी पसंद आए तो अपने अज़ीज़ दोस्तों के साथ ज़रूर शेयर करें। 📖",
+    "इसे सेव कर लें, जब भी सुकून और तन्हाई में शायरी पढ़ने का दिल करे। 🔖",
+    "एक शब्द या एक लाइन में बताइए, यह शेर आपको कैसा लगा? ✍️",
+    "दिलों के हाल को बयां करती ये पंक्तियाँ... ❤️",
+    "जौन एलिया और मिर्ज़ा ग़ालिब की शायरी का जादू हमेशा ज़िंदा रहता है। ✨",
+    "जिस दोस्त को शायरी का शौक़ हो, उसे ये रील ज़रूर भेजें। 🤝",
+    "लफ़्ज़ों में दर्द और एहसास का ऐसा संगम सिर्फ़ यहीं मिल सकता है। 🥀",
+    "शायरी वही जो दिल से निकले और रूह तक असर कर जाए। 📜",
 ]
 
 REEL_HASH = [
     "#reels", "#reelsindia", "#instareels", "#reelsinstagram", "#viralreels",
-    "#हिंदीशायरी", "#हिंदीमोटिवेशन", "#motivation", "#hindiquotes", "#success",
-    "#lifelessons", "#selfgrowth", "#positivevibes", "#मेहनत", "#सफलता",
-    "#discipline", "#dailymotivation", "#hindishayari", "#जिंदगी", "#mindset",
-    "#consistency", "#inspiration", "#quotesdaily", "#growth"
+    "#शायरी", "#हिंदीशायरी", "#उर्दूशायरी", "#hindishayari", "#urdushayari",
+    "#jaunelia", "#mirzaghalib", "#जौनएलिया", "#मिर्ज़ाग़ालिब", "#ghalib",
+    "#jauneliapoetry", "#ghalibpoetry", "#rekhta", "#sadshayari", "#shayari",
+    "#poetry", "#mohabbat", "#ishq", "#twolineshayari"
 ]
 
 def load(f, d):
@@ -88,8 +88,11 @@ def prepare():
     vid_abs_path = P(vid_rel_path)
     img_abs_path = P(img_rel_path)
 
-    print("Generating 1080x1920 Instagram Reel video and cover...")
-    render_reel(best_quote["id"], best_quote["tag"], best_quote["lines"], vid_abs_path, img_abs_path)
+    n = len([h for h in hist if h.get("status") == "published"])
+    selected_bgm = get_daily_bgm(n)
+    bgm_name = os.path.basename(selected_bgm) if selected_bgm else "fallback"
+    print(f"Generating 1080x1920 Instagram Reel video (BGM: {bgm_name}, Track #{n % 3 + 1} of 3) and cover...")
+    render_reel(best_quote["id"], best_quote["tag"], best_quote["lines"], vid_abs_path, img_abs_path, audio_file=selected_bgm)
 
     # 4. Verify rendered video & cover
     if not os.path.exists(vid_abs_path):
@@ -113,19 +116,18 @@ def prepare():
         print(f"Reel assets verified: Video {vid_size_kb:.1f} KB | Cover {width}x{height} (9:16 portrait), {cover_size_kb:.1f} KB")
 
     # 5. Generate matching caption & relevant Reel hashtags
-    n = len([h for h in hist if h.get("status") == "published"])
     hook = CAPTIONS[n % len(CAPTIONS)]
     tag_clean = f"#{best_quote['tag'].replace(' ', '')}"
 
-    selected_tags = ["#reels", "#reelsindia", "#हिंदीशायरी", "#hindishayari", tag_clean]
-    for i in range(5):
+    selected_tags = ["#reels", "#reelsindia", "#शायरी", "#hindishayari", tag_clean]
+    for i in range(6):
         selected_tags.append(REEL_HASH[(n * 3 + i) % len(REEL_HASH)])
     # Deduplicate while preserving order
     selected_tags = list(dict.fromkeys(selected_tags))
 
     caption = (
         f"{hook}\n\n"
-        f"✍️ Original shayari | @sabir_usmani_077\n\n"
+        f"✍️ {best_quote['tag']} | @sabir_usmani_077\n\n"
         + " ".join(selected_tags)
     )
 

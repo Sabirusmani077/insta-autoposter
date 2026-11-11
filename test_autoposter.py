@@ -5,7 +5,7 @@ from PIL import Image
 
 from quality import validate_quote, score_candidate, select_best_candidate, is_duplicate_or_too_similar
 from render import render, WATERMARK as WATERMARK_FEED
-from render_reel import render_reel, render_reel_cover, WATERMARK as WATERMARK_REEL, W as REEL_W, H as REEL_H
+from render_reel import render_reel, render_reel_cover, WATERMARK as WATERMARK_REEL, W as REEL_W, H as REEL_H, get_daily_bgm, BGM_TRACKS
 import main
 
 class TestInstaAutoposter(unittest.TestCase):
@@ -196,6 +196,27 @@ class TestInstaAutoposter(unittest.TestCase):
         selected_quote, score, count = select_best_candidate(test_quotes, self.history)
         self.assertIsNotNone(selected_quote)
         self.assertNotEqual(selected_quote["id"], 9999, "select_best_candidate must never pick duplicate candidate")
+
+    def test_bgm_tracks_and_rotation(self):
+        """Verify that all 3 requested YouTube background music tracks exist and rotate daily."""
+        self.assertEqual(len(BGM_TRACKS), 3, "Must have exactly 3 rotating BGM tracks")
+        for i, track in enumerate(BGM_TRACKS):
+            self.assertTrue(os.path.exists(track), f"Track #{i+1} ({track}) must exist on disk")
+            size_kb = os.path.getsize(track) / 1024
+            self.assertGreater(size_kb, 50, f"Track #{i+1} must be a valid audio file > 50KB")
+
+        # Test daily cycling: 0 -> Track 1, 1 -> Track 2, 2 -> Track 3, 3 -> Track 1
+        t0 = get_daily_bgm(0)
+        t1 = get_daily_bgm(1)
+        t2 = get_daily_bgm(2)
+        t3 = get_daily_bgm(3)
+
+        self.assertEqual(t0, BGM_TRACKS[0])
+        self.assertEqual(t1, BGM_TRACKS[1])
+        self.assertEqual(t2, BGM_TRACKS[2])
+        self.assertEqual(t3, BGM_TRACKS[0])
+        self.assertNotEqual(t0, t1)
+        self.assertNotEqual(t1, t2)
 
 if __name__ == "__main__":
     unittest.main()

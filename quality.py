@@ -13,9 +13,13 @@ BLOCKED_WORDS = {
 }
 
 HIGH_IMPACT_KEYWORDS = {
-    "मंज़िल", "हौसला", "मेहनत", "सब्र", "वक़्त", "वक़्त", "क़िस्मत", "तक़दीर",
+    "मंज़िल", "हौसला", "मेहनत", "सब्र", "वक़्त", "क़िस्मत", "तक़दीर",
     "जीत", "इतिहास", "रास्ता", "पहचान", "सफलता", "अनुशासन", "विश्वास", "सपना",
-    "उम्मीद", "शुरुआत", "हिम्मत", "इंसान", "लक्ष्य", "संघर्ष", "ज़िंदगी"
+    "उम्मीद", "शुरुआत", "हिम्मत", "इंसान", "लक्ष्य", "संघर्ष", "ज़िंदगी",
+    "इश्क़", "इश्क", "मोहब्बत", "दर्द", "दिल", "ख़्वाब", "ख्वाब", "जिंदगी",
+    "दुनिया", "तमन्ना", "आरज़ू", "याद", "ख़ामोशी", "खामोशी", "बात", "दीवाना",
+    "सफ़र", "साक़ी", "साकी", "ख़ुदा", "खुदा", "असर", "ग़म", "गम", "हसरत",
+    "आँखें", "चेहरा", "शायरी", "नज़र", "जहाँ", "ग़ालिब", "जौन", "ज़ख़्म", "वफ़ा"
 }
 
 def validate_quote(q):
@@ -97,13 +101,13 @@ def score_candidate(q, history):
     elif tag == recent_tags[-1]:
         freshness_score = 5.0  # posted yesterday
     elif tag in recent_tags:
-        freshness_score = 15.0 # posted within last 7 days
+        freshness_score = 18.0 # posted within last 7 days (encourages alternation)
     else:
         freshness_score = 25.0 # fresh theme
 
     # 3. Rhyme / Cadence Score (0-20)
     # Check end of line 2 and line 4 (or 1 and 2 if 2-line)
-    rhyme_score = 10.0
+    rhyme_score = 14.0
     if len(lines) == 4:
         end2 = lines[1].strip(" ,।!.-")[-3:]
         end4 = lines[3].strip(" ,।!.-")[-3:]
@@ -114,17 +118,19 @@ def score_candidate(q, history):
         end2 = lines[1].strip(" ,।!.-")[-3:]
         if end1 and end2 and (end1 == end2 or end1[-2:] == end2[-2:]):
             rhyme_score = 20.0
+        else:
+            rhyme_score = 16.0  # Standard classical Urdu sher cadence
 
     # 4. High Impact Keywords (0-20)
     full_text = " ".join(lines)
     keyword_hits = sum(1 for kw in HIGH_IMPACT_KEYWORDS if kw in full_text)
-    keyword_score = min(20.0, keyword_hits * 7.0)
+    keyword_score = min(20.0, max(8.0, keyword_hits * 7.0))
 
     # 5. Readability / Word count (0-15)
     word_count = len(full_text.split())
-    if 16 <= word_count <= 28:
+    if 10 <= word_count <= 28:
         readability_score = 15.0
-    elif 12 <= word_count <= 34:
+    elif 8 <= word_count <= 34:
         readability_score = 10.0
     else:
         readability_score = 6.0

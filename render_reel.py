@@ -21,6 +21,22 @@ FL_PATH = os.path.join(FONTS_DIR, "Roboto-Regular.ttf")
 
 AUDIO_DIR = os.path.join(ROOT, "audio")
 BGM_AUDIO = os.path.join(AUDIO_DIR, "bgm.mp3")
+BGM_TRACKS = [
+    os.path.join(AUDIO_DIR, "bgm_1.mp3"),  # https://www.youtube.com/shorts/cpNcQ1LlgvY
+    os.path.join(AUDIO_DIR, "bgm_2.mp3"),  # https://www.youtube.com/shorts/0Gf7LjkTSog
+    os.path.join(AUDIO_DIR, "bgm_3.mp3"),  # https://www.youtube.com/shorts/-BWcpL2O_sM
+]
+
+def get_daily_bgm(index=0):
+    """
+    Selects one of the 3 requested BGM tracks, cycling daily.
+    """
+    valid_tracks = [t for t in BGM_TRACKS if os.path.exists(t) and os.path.getsize(t) > 1000]
+    if valid_tracks:
+        return valid_tracks[index % len(valid_tracks)]
+    if os.path.exists(BGM_AUDIO) and os.path.getsize(BGM_AUDIO) > 1000:
+        return BGM_AUDIO
+    return None
 
 WATERMARK = "@sabir_usmani_077"
 
@@ -436,11 +452,27 @@ def render_reel_cover(qid, tag, lines, out_path):
     d.line(((W - 140) / 2, 515, (W + 140) / 2, 515), fill=accent, width=2)
 
     # 3. Center Hindi Shayari Couplet
-    # Dynamically scale font to fit within safe margins
-    y0 = 660
-    size = 58
-    while size > 38 and max(d.textlength(ln, font=get_font(FB_PATH, size)) for ln in lines) > 860:
-        size -= 2
+    # Dynamically scale font to fit within safe margins and optical center
+    n_lines = len(lines)
+    if n_lines == 2:
+        y0 = 800
+        size = 62
+        while size > 40 and max(d.textlength(ln, font=get_font(FB_PATH, size)) for ln in lines) > 880:
+            size -= 2
+        line_spacing = int(size * 1.9)
+    elif n_lines == 3:
+        y0 = 730
+        size = 58
+        while size > 38 and max(d.textlength(ln, font=get_font(FB_PATH, size)) for ln in lines) > 860:
+            size -= 2
+        line_spacing = int(size * 1.85)
+    else:  # 4 lines
+        y0 = 660
+        size = 56
+        while size > 36 and max(d.textlength(ln, font=get_font(FB_PATH, size)) for ln in lines) > 860:
+            size -= 2
+        line_spacing = int(size * 1.82)
+
     fm = get_font(FB_PATH, size)
 
     # Opening quotation mark
@@ -459,14 +491,14 @@ def render_reel_cover(qid, tag, lines, out_path):
         img.paste(sh, (0, 0), sh)
         # Foreground crisp white text
         ImageDraw.Draw(img).text(((W - w) / 2, y), ln, font=fm, fill=(255, 255, 255))
-        y += int(size * 1.82)
+        y += line_spacing
 
     # Closing quotation mark
     d.text(((W - 60) / 2, y - 20), "”", font=fq, fill=accent)
 
     # 4. Bottom CTA (Safe Zone: Y = 1480, safely above Reels caption area)
     fl_sub = get_latin_font(26)
-    sub_text = "Follow @sabir_usmani_077 for daily motivation"
+    sub_text = "Follow @sabir_usmani_077 for daily shayari"
     w_sub = d.textlength(sub_text, font=fl_sub)
     d.text(((W - w_sub) / 2, 1480), sub_text, font=fl_sub, fill=(225, 230, 245, 180))
 
@@ -543,26 +575,19 @@ def build_reel_video(frame_img, out_mp4, audio_file=None, duration=11):
     print(f"Successfully compiled Reel MP4: {out_mp4} ({size_mb:.2f} MB, {duration}s)")
     return out_mp4, duration
 
-def render_reel(qid, tag, lines, out_video_path, out_cover_path, duration=11):
+def render_reel(qid, tag, lines, out_video_path, out_cover_path, duration=11, audio_file=None):
     os.makedirs(os.path.dirname(os.path.abspath(out_video_path)), exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(out_cover_path)), exist_ok=True)
 
     # 1. Render cover & base visual frame with daily unique procedural background
     render_reel_cover(qid, tag, lines, out_cover_path)
 
-    # 2. Check for background music (Epic Inspiration / BGM)
-    bg_audio = None
-    for candidate in [
-        BGM_AUDIO,
-        os.path.join(AUDIO_DIR, "bgm.mp3"),
-        os.path.join(AUDIO_DIR, "epic_inspiration.mp3")
-    ]:
-        if os.path.exists(candidate) and os.path.getsize(candidate) > 1000:
-            bg_audio = candidate
-            break
+    # 2. Select background music (rotates across the 3 requested BGM tracks)
+    if not audio_file:
+        audio_file = get_daily_bgm(qid)
 
     # 3. Compile Reel MP4 video with Ken Burns zoom and background music
-    build_reel_video(out_cover_path, out_video_path, audio_file=bg_audio, duration=duration)
+    build_reel_video(out_cover_path, out_video_path, audio_file=audio_file, duration=duration)
 
     return out_video_path, out_cover_path
 

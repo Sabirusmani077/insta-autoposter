@@ -9,7 +9,8 @@ Ensures every selected quote meets strict standards for:
 import re
 
 BLOCKED_WORDS = {
-    "गाली", "नफ़रत", "धोखा", "घमंड", "कमीना", "अपमान", "लाश", "मौत"
+    "गाली", "नफ़रत", "धोखा", "घमंड", "कमीना", "अपमान", "लाश", "मौत",
+    "gaali", "nafrat", "dhokha", "ghamand", "kamina", "apmaan", "laash"
 }
 
 HIGH_IMPACT_KEYWORDS = {
@@ -19,7 +20,12 @@ HIGH_IMPACT_KEYWORDS = {
     "इश्क़", "इश्क", "मोहब्बत", "दर्द", "दिल", "ख़्वाब", "ख्वाब", "जिंदगी",
     "दुनिया", "तमन्ना", "आरज़ू", "याद", "ख़ामोशी", "खामोशी", "बात", "दीवाना",
     "सफ़र", "साक़ी", "साकी", "ख़ुदा", "खुदा", "असर", "ग़म", "गम", "हसरत",
-    "आँखें", "चेहरा", "शायरी", "नज़र", "जहाँ", "ग़ालिब", "जौन", "ज़ख़्म", "वफ़ा"
+    "आँखें", "चेहरा", "शायरी", "नज़र", "जहाँ", "ग़ालिब", "जौन", "ज़ख़्म", "वफ़ा",
+    "dil", "ishq", "dard", "mohabbat", "khwab", "khwaab", "zindagi", "duniya",
+    "tamanna", "aarzoo", "yaad", "khamoshi", "ghalib", "jaun", "elia", "zakhm",
+    "wafa", "manzil", "hausla", "sabr", "waqt", "kismat", "taqdeer", "saqi",
+    "khuda", "asar", "gham", "hasrat", "aankhein", "chehra", "shayari", "nazar",
+    "jahaan", "raat", "armaan", "junoon", "baat", "hum", "tum", "sukoon"
 }
 
 def validate_quote(q):
@@ -37,7 +43,7 @@ def validate_quote(q):
     if qid is None or not isinstance(qid, int):
         return False, f"Invalid quote id: {qid}"
     
-    if not tag or len(tag) < 2 or len(tag) > 20:
+    if not tag or len(tag) < 2 or len(tag) > 30:
         return False, f"Invalid tag '{tag}' in quote {qid}"
     
     if not isinstance(lines, list) or len(lines) < 2 or len(lines) > 4:
@@ -59,16 +65,16 @@ def validate_quote(q):
             return False, f"Line {i+1} in quote {qid} is empty"
         if len(line) < 6:
             return False, f"Line {i+1} in quote {qid} is too short ({len(line)} chars)"
-        if len(line) > 55:
+        if len(line) > 60:
             return False, f"Line {i+1} in quote {qid} is too long ({len(line)} chars) - exceeds safe typography width"
         
-        # Check Devanagari presence
-        has_devanagari = any(0x0900 <= ord(c) <= 0x097F for c in line)
-        if not has_devanagari:
-            return False, f"Line {i+1} in quote {qid} does not contain Devanagari characters"
+        # Check Devanagari or Latin presence
+        has_text = any(0x0900 <= ord(c) <= 0x097F or ('a' <= c.lower() <= 'z') for c in line)
+        if not has_text:
+            return False, f"Line {i+1} in quote {qid} does not contain valid text characters"
 
         # Check blocklist using whole-word matching
-        words = set(re.findall(r"[\u0900-\u097F]+", line))
+        words = set(re.findall(r"[a-zA-Z\u0900-\u097F]+", line.lower()))
         for bw in BLOCKED_WORDS:
             if bw in words:
                 return False, f"Quote {qid} contains restricted keyword: {bw}"
@@ -153,7 +159,7 @@ def is_duplicate_or_too_similar(candidate, published_quotes):
 
     cand_norm_full = clean_str(" ".join(cand_lines))
     cand_norm_lines = {clean_str(l) for l in cand_lines if clean_str(l)}
-    cand_words = set(re.findall(r"[\u0900-\u097F]+", " ".join(cand_lines)))
+    cand_words = set(re.findall(r"[a-zA-Z\u0900-\u097F]+", " ".join(cand_lines).lower()))
 
     for pub in published_quotes:
         pub_lines = pub.get("lines", [])
@@ -162,18 +168,18 @@ def is_duplicate_or_too_similar(candidate, published_quotes):
         pub_id = pub.get("id")
 
         # 1. Full text normalized match
-        pub_norm_full = clean_str(" ".join(pub_lines))
-        if cand_norm_full == pub_norm_full:
+        pub_norm_full = clean_str(" ".join(pub_lines)).lower()
+        if cand_norm_full.lower() == pub_norm_full:
             return True, f"Exact normalized full text matches published quote {pub_id}"
 
         # 2. Shared lines check (reject if any line matches)
-        pub_norm_lines = {clean_str(l) for l in pub_lines if clean_str(l)}
-        shared_lines = cand_norm_lines.intersection(pub_norm_lines)
+        pub_norm_lines = {clean_str(l).lower() for l in pub_lines if clean_str(l)}
+        shared_lines = {l.lower() for l in cand_norm_lines}.intersection(pub_norm_lines)
         if len(shared_lines) >= 1:
             return True, f"Shares {len(shared_lines)} line(s) with published quote {pub_id}"
 
         # 3. Vocabulary overlap (Jaccard similarity >= 60%)
-        pub_words = set(re.findall(r"[\u0900-\u097F]+", " ".join(pub_lines)))
+        pub_words = set(re.findall(r"[a-zA-Z\u0900-\u097F]+", " ".join(pub_lines).lower()))
         if cand_words and pub_words:
             overlap = len(cand_words.intersection(pub_words))
             union = len(cand_words.union(pub_words))

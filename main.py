@@ -18,16 +18,16 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 P = lambda f: os.path.join(ROOT, f)
 
 CAPTIONS = [
-    "ग़ालिब और जौन के लफ़्ज़ सीधे रूह में उतरते हैं... 🖤",
-    "कौन सी पंक्ति आपके दिल को सबसे ज़्यादा छू गई? कमेंट में लिखें। ✒️",
-    "शायरी पसंद आए तो अपने अज़ीज़ दोस्तों के साथ ज़रूर शेयर करें। 📖",
-    "इसे सेव कर लें, जब भी सुकून और तन्हाई में शायरी पढ़ने का दिल करे। 🔖",
-    "एक शब्द या एक लाइन में बताइए, यह शेर आपको कैसा लगा? ✍️",
-    "दिलों के हाल को बयां करती ये पंक्तियाँ... ❤️",
-    "जौन एलिया और मिर्ज़ा ग़ालिब की शायरी का जादू हमेशा ज़िंदा रहता है। ✨",
-    "जिस दोस्त को शायरी का शौक़ हो, उसे ये रील ज़रूर भेजें। 🤝",
-    "लफ़्ज़ों में दर्द और एहसास का ऐसा संगम सिर्फ़ यहीं मिल सकता है। 🥀",
-    "शायरी वही जो दिल से निकले और रूह तक असर कर जाए। 📜",
+    "Ghalib aur Jaun ke alfaaz seedhe rooh mein utarte hain... 🖤",
+    "Kaun si line aapke dil ko sabse zyada chhoo gayi? Comment mein likhein. ✒️",
+    "Shayari pasand aaye to apne azeez doston ke saath zaroor share karein. 📖",
+    "Ise save kar lein, jab bhi sukoon aur tanhai mein shayari padhne ka dil kare. 🔖",
+    "Ek lafz ya ek line mein batayein, ye sher aapko kaisa laga? ✍️",
+    "Dilon ke haal ko bayaan karti ye lines... ❤️",
+    "Jaun Elia aur Mirza Ghalib ki shayari ka jaadu hamesha zinda rehta hai. ✨",
+    "Jis dost ko shayari ka shauq ho, use ye reel zaroor bhejein. 🤝",
+    "Lafzon mein dard aur ehsaas ka aisa sangam sirf yahin mil sakta hai. 🥀",
+    "Shayari wahi jo dil se nikle aur rooh tak asar kar jaaye. 📜",
 ]
 
 REEL_HASH = [

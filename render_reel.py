@@ -18,6 +18,7 @@ FONTS_DIR = os.path.join(ROOT, "fonts")
 FB_PATH = os.path.join(FONTS_DIR, "NotoSansDevanagari-Bold.ttf")
 FR_PATH = os.path.join(FONTS_DIR, "NotoSansDevanagari-Regular.ttf")
 FL_PATH = os.path.join(FONTS_DIR, "Roboto-Regular.ttf")
+FLB_PATH = os.path.join(FONTS_DIR, "Roboto-Bold.ttf")
 
 AUDIO_DIR = os.path.join(ROOT, "audio")
 BGM_AUDIO = os.path.join(AUDIO_DIR, "bgm.mp3")
@@ -53,6 +54,21 @@ def get_latin_font(size):
         if os.path.exists(p):
             return get_font(p, size)
     return get_font(FR_PATH, size)
+
+def get_latin_bold_font(size):
+    if os.path.exists(FLB_PATH):
+        return get_font(FLB_PATH, size)
+    for p in ["C:/Windows/Fonts/arialbd.ttf", "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"]:
+        if os.path.exists(p):
+            return get_font(p, size)
+    return get_latin_font(size)
+
+def get_text_font(sample_text, size, bold=True):
+    has_devanagari = any(0x0900 <= ord(c) <= 0x097F for c in sample_text)
+    if has_devanagari:
+        return get_font(FB_PATH if bold else FR_PATH, size)
+    else:
+        return get_latin_bold_font(size) if bold else get_latin_font(size)
 
 def create_gradient(stops):
     img = Image.new("RGB", (W, H))
@@ -445,38 +461,39 @@ def render_reel_cover(qid, tag, lines, out_path):
     d.text(((W - w_wm) / 2, 230), wm_text, font=fl_wm, fill=tag_accent)
 
     # 2. Tag Badge (Safe Zone: Y = 460)
-    ft = get_font(FR_PATH, 36)
     tag_text = f"— {tag} —"
+    ft = get_text_font(tag_text, 36, bold=False)
     tw = d.textlength(tag_text, font=ft)
     d.text(((W - tw) / 2, 460), tag_text, font=ft, fill=accent)
     d.line(((W - 140) / 2, 515, (W + 140) / 2, 515), fill=accent, width=2)
 
-    # 3. Center Hindi Shayari Couplet
+    # 3. Center Hindi / Roman Shayari Couplet
     # Dynamically scale font to fit within safe margins and optical center
+    all_text = " ".join(lines)
     n_lines = len(lines)
     if n_lines == 2:
         y0 = 800
         size = 62
-        while size > 40 and max(d.textlength(ln, font=get_font(FB_PATH, size)) for ln in lines) > 880:
+        while size > 38 and max(d.textlength(ln, font=get_text_font(all_text, size, bold=True)) for ln in lines) > 880:
             size -= 2
-        line_spacing = int(size * 1.9)
+        line_spacing = int(size * 1.88)
     elif n_lines == 3:
         y0 = 730
         size = 58
-        while size > 38 and max(d.textlength(ln, font=get_font(FB_PATH, size)) for ln in lines) > 860:
+        while size > 36 and max(d.textlength(ln, font=get_text_font(all_text, size, bold=True)) for ln in lines) > 860:
             size -= 2
-        line_spacing = int(size * 1.85)
+        line_spacing = int(size * 1.84)
     else:  # 4 lines
         y0 = 660
-        size = 56
-        while size > 36 and max(d.textlength(ln, font=get_font(FB_PATH, size)) for ln in lines) > 860:
+        size = 54
+        while size > 34 and max(d.textlength(ln, font=get_text_font(all_text, size, bold=True)) for ln in lines) > 860:
             size -= 2
-        line_spacing = int(size * 1.82)
+        line_spacing = int(size * 1.80)
 
-    fm = get_font(FB_PATH, size)
+    fm = get_text_font(all_text, size, bold=True)
 
     # Opening quotation mark
-    fq = get_font(FB_PATH, 80)
+    fq = get_latin_bold_font(80)
     d.text(((W - 60) / 2, y0 - 95), "“", font=fq, fill=accent)
 
     y = y0

@@ -24,8 +24,11 @@ def resolve_font_path(candidates):
             return p
     return candidates[0]
 
-FB = resolve_font_path(FB_CANDIDATES)
-FR = resolve_font_path(FR_CANDIDATES)
+FB_DEV = resolve_font_path(FB_CANDIDATES)
+FR_DEV = resolve_font_path(FR_CANDIDATES)
+FL_PATH = os.path.join(FONTS_DIR, "Roboto-Regular.ttf")
+FLB_PATH = os.path.join(FONTS_DIR, "Roboto-Bold.ttf")
+
 WATERMARK = "@sabir_usmani_077"
 
 def font(p, s):
@@ -33,6 +36,14 @@ def font(p, s):
         return ImageFont.truetype(p, s, layout_engine=ImageFont.Layout.RAQM)
     except Exception:
         return ImageFont.truetype(p, s)
+
+def get_text_font(sample_text, s, bold=True):
+    has_devanagari = any(0x0900 <= ord(c) <= 0x097F for c in sample_text)
+    if has_devanagari:
+        return font(FB_DEV if bold else FR_DEV, s)
+    else:
+        path = FLB_PATH if (bold and os.path.exists(FLB_PATH)) else (FL_PATH if os.path.exists(FL_PATH) else FB_DEV)
+        return font(path, s)
 
 def grad(stops):
     img = Image.new("RGB", (W, H)); d = ImageDraw.Draw(img)
@@ -84,19 +95,20 @@ def render(qid, tag, lines, out_path):
         cx, cy, r, c = s["sun"]; d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=c)
     for i, (b, a, c) in enumerate(s["ridges"]): ridge(img, b, a, c, qid * 10 + i)
     d = ImageDraw.Draw(img); acc = s["accent"]; y0 = s["ty"]
-    ft = font(FR, 38); tw = d.textlength(tag, font=ft)
+    ft = get_text_font(tag, 38, bold=False); tw = d.textlength(tag, font=ft)
     d.text(((W - tw) / 2, y0 - 110), tag, font=ft, fill=acc)
     d.line(((W - 120) / 2, y0 - 45, (W + 120) / 2, y0 - 45), fill=acc, width=3)
+    all_text = " ".join(lines)
     size = 70
-    while size > 40 and max(d.textlength(l, font=font(FB, size)) for l in lines) > 920: size -= 2
-    fm = font(FB, size); y = y0
+    while size > 40 and max(d.textlength(l, font=get_text_font(all_text, size, bold=True)) for l in lines) > 920: size -= 2
+    fm = get_text_font(all_text, size, bold=True); y = y0
     for ln in lines:
         w = d.textlength(ln, font=fm)
         sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         ImageDraw.Draw(sh).text(((W - w) / 2 + 3, y + 4), ln, font=fm, fill=(0, 0, 0, 140))
         sh = sh.filter(ImageFilter.GaussianBlur(5)); img.paste(sh, (0, 0), sh)
         ImageDraw.Draw(img).text(((W - w) / 2, y), ln, font=fm, fill=(255, 255, 255)); y += int(size * 1.7)
-    fw = font(FR, 30); w = d.textlength(WATERMARK, font=fw)
+    fw = get_text_font(WATERMARK, 30, bold=False); w = d.textlength(WATERMARK, font=fw)
     wm = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(wm).text(((W - w) / 2, H - 80), WATERMARK, font=fw, fill=(255, 255, 255, 120))
     img.paste(wm, (0, 0), wm)

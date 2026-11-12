@@ -149,27 +149,45 @@ def prepare():
     print(caption)
     print("-----------------------------")
 
-def call(method, url, params):
+def call(method, url, params, max_retries=4, initial_delay=6, retry_codes=(1, 2, 4, 17, 341, 9007)):
     data = urllib.parse.urlencode(params)
     full_url = url + ("?" + data if method == "GET" else "")
-    req = urllib.request.Request(
-        full_url,
-        data=None if method == "GET" else data.encode("utf-8"),
-        method=method,
-        headers={"User-Agent": "InstaAutoPoster/2.0"}
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        raw_err = e.read().decode("utf-8", errors="replace")
+
+    for attempt in range(max_retries):
+        req = urllib.request.Request(
+            full_url,
+            data=None if method == "GET" else data.encode("utf-8"),
+            method=method,
+            headers={"User-Agent": "InstaAutoPoster/2.0"}
+        )
         try:
-            err_json = json.loads(raw_err)
-            err_obj = err_json.get("error", {})
-            msg = err_obj.get("message", raw_err)
-            err_type = err_obj.get("type", "Error")
-            code = err_obj.get("code", "N/A")
-            subcode = err_obj.get("error_subcode", "")
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            raw_err = e.read().decode("utf-8", errors="replace")
+            try:
+                err_json = json.loads(raw_err)
+                err_obj = err_json.get("error", {})
+                msg = err_obj.get("message", raw_err)
+                err_type = err_obj.get("type", "Error")
+                code = err_obj.get("code", "N/A")
+                subcode = err_obj.get("error_subcode", "")
+            except Exception:
+                err_obj = {}
+                msg = raw_err
+                err_type = "HTTPError"
+                code = e.code
+                subcode = ""
+
+            # Check if this error is transient and retryable (Meta Code 2: Please retry later, Code 1: Unknown, or HTTP 5xx)
+            is_transient = (code in retry_codes) or (isinstance(code, int) and code in retry_codes) or (e.code in (500, 502, 503, 504))
+            if is_transient and attempt < max_retries - 1:
+                wait_time = initial_delay * (attempt + 1)
+                print(f"::warning::Meta API Transient Error [{code}/{subcode}] ({err_type}): {msg}")
+                print(f"Retrying request in {wait_time}s (attempt {attempt+1}/{max_retries})...")
+                time.sleep(wait_time)
+                continue
+
             print(f"::error::Meta API Error [{code}/{subcode}] ({err_type}): {msg}")
             if code == 190:
                 print("::error::The IG_ACCESS_TOKEN is invalid or expired. Please refresh the token.")
@@ -177,12 +195,15 @@ def call(method, url, params):
                 print("::error::Permission missing: Ensure 'instagram_business_content_publish' is granted to the token.")
             elif code == 24:
                 print("::error::User ID mismatch: Verify that IG_USER_ID matches your Instagram Creator/Business account.")
-        except Exception:
-            print("::error::API HTTP Error:", raw_err)
-        sys.exit(1)
-    except Exception as e:
-        print(f"::error::Network error while calling {url}: {e}")
-        sys.exit(1)
+            sys.exit(1)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = initial_delay * (attempt + 1)
+                print(f"::warning::Network error while calling {url}: {e}. Retrying in {wait_time}s (attempt {attempt+1}/{max_retries})...")
+                time.sleep(wait_time)
+                continue
+            print(f"::error::Network error while calling {url}: {e}")
+            sys.exit(1)
 
 def resolve_public_url(rel_path, repo):
     commit_sha = None
@@ -257,52 +278,73 @@ def publish():
         video_url = resolve_public_url(t["video"], repo)
         cover_url = resolve_public_url(t["image"], repo)
 
-        print("Step 1: Creating Instagram Reel media container...")
-        c_res = call("POST", f"{base}/{uid}/media", {
-            "media_type": "REELS",
-            "video_url": video_url,
-            "cover_url": cover_url,
-            "caption": t["caption"],
-            "share_to_feed": "true",
-            "access_token": tok
-        })
-        container_id = c_res.get("id")
-        if not container_id:
-            print("::error::Reel container creation did not return an ID:", c_res)
-            sys.exit(1)
-        print(f"Reel container created successfully. ID: {container_id}")
+        post_id = None
+        # Allow up to 2 complete container attempts in case Meta's container gets desynced
+        for container_cycle in range(2):
+            if container_cycle > 0:
+                print("\n::warning::Re-attempting Reel creation with a fresh media container...")
+                time.sleep(10)
 
-        print("Step 2: Checking Reel container transcoding status...")
-        finished = False
-        # Video transcoding on Meta servers takes 15 to 60 seconds
-        for attempt in range(30):
-            st_res = call("GET", f"{base}/{container_id}", {
-                "fields": "status_code,status",
+            print(f"Step 1: Creating Instagram Reel media container (Cycle {container_cycle+1}/2)...")
+            c_res = call("POST", f"{base}/{uid}/media", {
+                "media_type": "REELS",
+                "video_url": video_url,
+                "cover_url": cover_url,
+                "caption": t["caption"],
+                "share_to_feed": "true",
                 "access_token": tok
             })
-            st = st_res.get("status_code")
-            print(f"Reel status check ({attempt+1}/30): {st}")
-            if st == "FINISHED":
-                finished = True
-                break
-            if st == "ERROR":
-                err_msg = st_res.get("status", "Unknown container processing error")
-                print(f"::error::Instagram Reel processing failed: {err_msg}")
+            container_id = c_res.get("id")
+            if not container_id:
+                print("::error::Reel container creation did not return an ID:", c_res)
                 sys.exit(1)
-            time.sleep(5)
+            print(f"Reel container created successfully. ID: {container_id}")
 
-        if not finished:
-            print("::error::Reel processing timed out without reaching FINISHED status.")
-            sys.exit(1)
+            print("Step 2: Checking Reel container transcoding status...")
+            finished = False
+            # Video transcoding on Meta servers takes 15 to 60 seconds
+            for attempt in range(35):
+                st_res = call("GET", f"{base}/{container_id}", {
+                    "fields": "status_code,status",
+                    "access_token": tok
+                })
+                st = st_res.get("status_code")
+                print(f"Reel status check ({attempt+1}/35): {st}")
+                if st == "FINISHED":
+                    finished = True
+                    print("Container status is FINISHED. Allowing 10s propagation buffer before media_publish...")
+                    time.sleep(10)
+                    break
+                if st == "ERROR":
+                    err_msg = st_res.get("status", "Unknown container processing error")
+                    print(f"::error::Instagram Reel processing failed: {err_msg}")
+                    break
+                time.sleep(5)
 
-        print("Step 3: Publishing Reel to Instagram...")
-        pub_res = call("POST", f"{base}/{uid}/media_publish", {
-            "creation_id": container_id,
-            "access_token": tok
-        })
-        post_id = pub_res.get("id")
+            if not finished:
+                print(f"::warning::Reel processing timed out or failed without reaching FINISHED status on cycle {container_cycle+1}.")
+                continue
+
+            print("Step 3: Publishing Reel to Instagram (with retry mechanism)...")
+            pub_res = call(
+                "POST",
+                f"{base}/{uid}/media_publish",
+                {
+                    "creation_id": container_id,
+                    "access_token": tok
+                },
+                max_retries=5,
+                initial_delay=10,
+                retry_codes=(1, 2, 4, 17, 341, 9007)
+            )
+            post_id = pub_res.get("id")
+            if post_id:
+                break
+            else:
+                print(f"::warning::Publish call did not return an ID on cycle {container_cycle+1}: {pub_res}")
+
         if not post_id:
-            print("::error::Media publishing did not return a post ID:", pub_res)
+            print("::error::Failed to publish Reel after multiple container cycles.")
             sys.exit(1)
 
         hist.append({
@@ -336,15 +378,17 @@ def publish():
 
         print("Step 2: Checking container status...")
         finished = False
-        for attempt in range(15):
+        for attempt in range(20):
             st_res = call("GET", f"{base}/{container_id}", {
                 "fields": "status_code,status",
                 "access_token": tok
             })
             st = st_res.get("status_code")
-            print(f"Container status check ({attempt+1}/15): {st}")
+            print(f"Container status check ({attempt+1}/20): {st}")
             if st == "FINISHED":
                 finished = True
+                print("Container status is FINISHED. Allowing 5s propagation buffer before media_publish...")
+                time.sleep(5)
                 break
             if st == "ERROR":
                 err_msg = st_res.get("status", "Unknown container processing error")
@@ -360,7 +404,7 @@ def publish():
         pub_res = call("POST", f"{base}/{uid}/media_publish", {
             "creation_id": container_id,
             "access_token": tok
-        })
+        }, max_retries=5, initial_delay=8, retry_codes=(1, 2, 4, 17, 341, 9007))
         post_id = pub_res.get("id")
         if not post_id:
             print("::error::Media publishing did not return a post ID:", pub_res)

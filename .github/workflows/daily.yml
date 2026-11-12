@@ -42,15 +42,16 @@ jobs:
       - name: Fast check if already published today
         id: precheck
         run: |
-          TODAY=$(date -u -d "+5 hours 30 minutes" +%Y-%m-%d || python3 -c "import datetime; print((datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=5, minutes=30)).date().isoformat())")
-          echo "Target IST date: $TODAY"
-          if grep -q "\"date\": \"$TODAY\"" history.json && grep -q "\"status\": \"published\"" history.json; then
-            echo "Already published for today ($TODAY). Skipping pipeline."
-            echo "ALREADY_DONE=true" >> $GITHUB_ENV
-          else
-            echo "Not yet published for today ($TODAY). Proceeding with post pipeline."
-            echo "ALREADY_DONE=false" >> $GITHUB_ENV
-          fi
+          python3 -c "
+          import json, datetime, os
+          today = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=5, minutes=30)).date().isoformat()
+          print(f'Target IST date: {today}')
+          hist = json.load(open('history.json', 'r', encoding='utf-8')) if os.path.exists('history.json') else []
+          is_done = any(h.get('date') == today and h.get('status') == 'published' for h in hist)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'ALREADY_DONE={\"true\" if is_done else \"false\"}\n')
+          print(f'ALREADY_DONE={is_done}')
+          "
 
       - name: Set up Python 3.12
         if: env.ALREADY_DONE != 'true'
@@ -91,6 +92,8 @@ jobs:
       - name: Record history and update repository
         if: always() && env.ALREADY_DONE != 'true' && env.DO_PUBLISH == 'true'
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add history.json
           git commit -m "chore(history): record published reel [skip ci]" || echo "No history changes to commit"
           git pull --rebase origin main || true

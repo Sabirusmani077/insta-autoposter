@@ -218,6 +218,75 @@ class TestInstaAutoposter(unittest.TestCase):
         self.assertNotEqual(t0, t1)
         self.assertNotEqual(t1, t2)
 
+    def test_threads_caption_formatting(self):
+        """Verify Threads caption length enforcement within 500 characters limit."""
+        short_caption = "Dilon ke haal ko bayaan karti ye lines... ❤️\n\n✍️ Mirza Ghalib | @sabir_usmani_077"
+        formatted_short = main.format_threads_caption(short_caption)
+        self.assertEqual(formatted_short, short_caption)
+        self.assertLessEqual(len(formatted_short), 500)
+
+        # Long caption exceeding 500 characters
+        long_caption = "A" * 600
+        formatted_long = main.format_threads_caption(long_caption)
+        self.assertEqual(len(formatted_long), 500)
+        self.assertTrue(formatted_long.endswith("..."))
+
+    def test_threads_publishing_graceful_when_no_token(self):
+        """Threads publishing must be completely non-blocking if THREADS_ACCESS_TOKEN is not configured."""
+        result = main.publish_to_threads("https://example.com/test.mp4", "Test caption", tok="", uid="")
+        self.assertIsNone(result)
+
+    def test_threads_mock_publish_success(self):
+        """Mock full Threads publishing workflow: container creation, status polling, and container publish."""
+        from unittest.mock import patch
+
+        def mock_call(method, url, params, *args, **kwargs):
+            if "/me" in url:
+                return {"id": "th_user_123", "username": "sabir_usmani_077"}
+            elif "/th_user_123/threads_publish" in url:
+                return {"id": "th_post_9999"}
+            elif "/th_container_abc" in url:
+                return {"status": "FINISHED"}
+            elif "/th_user_123/threads" in url:
+                return {"id": "th_container_abc"}
+            return {}
+
+        with patch("main.call", side_effect=mock_call), patch("time.sleep", return_value=None):
+            post_id = main.publish_to_threads(
+                media_url="https://example.com/video.mp4",
+                caption="Testing Threads publish",
+                tok="fake_token",
+                uid="th_user_123",
+                is_video=True
+            )
+            self.assertEqual(post_id, "th_post_9999")
+
+    def test_threads_mock_publish_error_handling(self):
+        """Mock Threads API failure and verify graceful return of None without crashing."""
+        from unittest.mock import patch
+
+        def mock_call_error(method, url, params, *args, **kwargs):
+            if "/threads" in url:
+                return {"error": {"message": "Invalid OAuth token", "code": 190}}
+            return {}
+
+        with patch("main.call", side_effect=mock_call_error):
+            post_id = main.publish_to_threads(
+                media_url="https://example.com/video.mp4",
+                caption="Testing error",
+                tok="fake_token",
+                uid="th_user_123",
+                is_video=True
+            )
+            self.assertIsNone(post_id)
+
+    def test_call_non_fatal_mode(self):
+        """Verify that call(..., fatal_exit=False) returns error dict instead of invoking sys.exit."""
+        # Using a dummy unreachable URL with 1 retry
+        res = main.call("GET", "http://127.0.0.1:54321/nonexistent", {}, max_retries=1, fatal_exit=False)
+        self.assertIsInstance(res, dict)
+        self.assertIn("error", res)
+
 if __name__ == "__main__":
     unittest.main()
 

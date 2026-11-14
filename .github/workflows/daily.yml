@@ -81,11 +81,13 @@ jobs:
           git pull --rebase origin main || true
           git push origin main || true
 
-      - name: Publish Reel to Instagram
+      - name: Publish Reel to Instagram and Threads
         if: env.ALREADY_DONE != 'true' && env.DO_PUBLISH == 'true'
         env:
             IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
             IG_USER_ID: ${{ secrets.IG_USER_ID }}
+            THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+            THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
             GITHUB_REPOSITORY: ${{ github.repository }}
         run: python main.py publish
 

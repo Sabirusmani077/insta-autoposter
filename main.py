@@ -149,7 +149,7 @@ def prepare():
     print(caption)
     print("-----------------------------")
 
-def call(method, url, params, max_retries=4, initial_delay=6, retry_codes=(1, 2, 4, 17, 341, 9007)):
+def call(method, url, params, max_retries=4, initial_delay=6, retry_codes=(1, 2, 4, 17, 341, 9007), fatal_exit=True):
     data = urllib.parse.urlencode(params)
     full_url = url + ("?" + data if method == "GET" else "")
 
@@ -188,6 +188,10 @@ def call(method, url, params, max_retries=4, initial_delay=6, retry_codes=(1, 2,
                 time.sleep(wait_time)
                 continue
 
+            if not fatal_exit:
+                print(f"::warning::Meta API Call Failed [{code}/{subcode}] ({err_type}): {msg}")
+                return {"error": {"code": code, "subcode": subcode, "message": msg, "type": err_type}}
+
             print(f"::error::Meta API Error [{code}/{subcode}] ({err_type}): {msg}")
             if code == 190:
                 print("::error::The IG_ACCESS_TOKEN is invalid or expired. Please refresh the token.")
@@ -202,8 +206,113 @@ def call(method, url, params, max_retries=4, initial_delay=6, retry_codes=(1, 2,
                 print(f"::warning::Network error while calling {url}: {e}. Retrying in {wait_time}s (attempt {attempt+1}/{max_retries})...")
                 time.sleep(wait_time)
                 continue
+            if not fatal_exit:
+                print(f"::warning::Network error while calling {url}: {e}")
+                return {"error": {"message": str(e)}}
             print(f"::error::Network error while calling {url}: {e}")
             sys.exit(1)
+
+def format_threads_caption(caption, max_len=500):
+    if not caption:
+        return ""
+    if len(caption) <= max_len:
+        return caption
+    return caption[:max_len - 3].rstrip() + "..."
+
+def publish_to_threads(media_url, caption, tok=None, uid=None, is_video=True):
+    """
+    Publish video or photo to Meta Threads account using Threads API v1.0 (graph.threads.net).
+    This function is non-blocking: if THREADS_ACCESS_TOKEN is not configured or an error occurs,
+    it logs an informational message or warning and returns None without failing the Instagram run.
+    """
+    tok = (tok or os.environ.get("THREADS_ACCESS_TOKEN", "")).strip()
+    uid = (uid or os.environ.get("THREADS_USER_ID", "")).strip()
+
+    if not tok:
+        print("::notice::THREADS_ACCESS_TOKEN is not configured in repository secrets. Skipping Threads cross-post.")
+        return None
+
+    print("\n=== Cross-Posting to Meta Threads ===")
+    threads_base = "https://graph.threads.net/v1.0"
+
+    # Step 0: Identify account from token if UID not explicitly set
+    try:
+        me_info = call("GET", f"{threads_base}/me", {"fields": "id,username", "access_token": tok}, fatal_exit=False)
+        if isinstance(me_info, dict) and "username" in me_info:
+            print(f"Connected Threads account: @{me_info.get('username')} (ID: {me_info.get('id')})")
+            if not uid or uid.lower() == "me":
+                uid = me_info.get("id")
+    except Exception as e:
+        print(f"::warning::Could not query Threads /me endpoint: {e}")
+
+    target_uid = uid if uid else "me"
+    th_caption = format_threads_caption(caption)
+
+    # Step 1: Create media container
+    print(f"Step 1 (Threads): Creating media container for target user '{target_uid}'...")
+    container_params = {
+        "text": th_caption,
+        "access_token": tok
+    }
+    if is_video:
+        container_params["media_type"] = "VIDEO"
+        container_params["video_url"] = media_url
+    else:
+        container_params["media_type"] = "IMAGE"
+        container_params["image_url"] = media_url
+
+    c_res = call("POST", f"{threads_base}/{target_uid}/threads", container_params, fatal_exit=False)
+    container_id = c_res.get("id") if isinstance(c_res, dict) else None
+    if not container_id:
+        print(f"::warning::Threads media container creation failed: {c_res}")
+        return None
+    print(f"Threads media container created successfully. ID: {container_id}")
+
+    # Step 2: Poll status until FINISHED
+    print("Step 2 (Threads): Polling container transcoding / processing status...")
+    finished = False
+    for attempt in range(35):
+        st_res = call("GET", f"{threads_base}/{container_id}", {
+            "fields": "status,error_message",
+            "access_token": tok
+        }, fatal_exit=False)
+        st = st_res.get("status") if isinstance(st_res, dict) else "UNKNOWN"
+        print(f"Threads status check ({attempt+1}/35): {st}")
+        if st == "FINISHED":
+            finished = True
+            print("Threads container status is FINISHED. Allowing 8s propagation buffer before publishing...")
+            time.sleep(8)
+            break
+        elif st == "ERROR":
+            err_msg = st_res.get("error_message", "Unknown Threads media processing error")
+            print(f"::warning::Threads media processing failed: {err_msg}")
+            return None
+        time.sleep(5)
+
+    if not finished:
+        print("::warning::Threads container processing timed out without reaching FINISHED status.")
+        return None
+
+    # Step 3: Publish container
+    print("Step 3 (Threads): Publishing container to Threads...")
+    pub_res = call(
+        "POST",
+        f"{threads_base}/{target_uid}/threads_publish",
+        {
+            "creation_id": container_id,
+            "access_token": tok
+        },
+        max_retries=5,
+        initial_delay=8,
+        fatal_exit=False
+    )
+    threads_post_id = pub_res.get("id") if isinstance(pub_res, dict) else None
+    if threads_post_id:
+        print(f"SUCCESS: Cross-posted to Meta Threads! Threads Post ID: {threads_post_id}")
+        return threads_post_id
+    else:
+        print(f"::warning::Threads publish did not return an ID: {pub_res}")
+        return None
 
 def resolve_public_url(rel_path, repo):
     commit_sha = None
@@ -347,7 +456,7 @@ def publish():
             print("::error::Failed to publish Reel after multiple container cycles.")
             sys.exit(1)
 
-        hist.append({
+        hist_entry = {
             "date": t["date"],
             "id": t["id"],
             "tag": t.get("tag", ""),
@@ -356,9 +465,16 @@ def publish():
             "post_id": post_id,
             "published_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "caption": t["caption"]
-        })
+        }
+        hist.append(hist_entry)
         save("history.json", hist)
         print(f"SUCCESS: Reel published to Instagram! Reel Media ID: {post_id}")
+
+        # Cross-post to Meta Threads
+        threads_post_id = publish_to_threads(video_url, t["caption"], is_video=True)
+        if threads_post_id:
+            hist_entry["threads_post_id"] = threads_post_id
+            save("history.json", hist)
 
     else:
         print("=== Publishing Mode: STATIC PHOTO (Fallback) ===")
@@ -410,7 +526,7 @@ def publish():
             print("::error::Media publishing did not return a post ID:", pub_res)
             sys.exit(1)
 
-        hist.append({
+        hist_entry = {
             "date": t["date"],
             "id": t["id"],
             "tag": t.get("tag", ""),
@@ -419,9 +535,16 @@ def publish():
             "post_id": post_id,
             "published_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "caption": t["caption"]
-        })
+        }
+        hist.append(hist_entry)
         save("history.json", hist)
         print(f"SUCCESS: Post published to Instagram! Media ID: {post_id}")
+
+        # Cross-post to Meta Threads
+        threads_post_id = publish_to_threads(img_url, t["caption"], is_video=False)
+        if threads_post_id:
+            hist_entry["threads_post_id"] = threads_post_id
+            save("history.json", hist)
 
 def dryrun():
     print("=== STARTING FULL REEL DRY RUN ===")
@@ -438,6 +561,8 @@ def dryrun():
     print(f"Video: {t.get('video')}")
     print(f"Cover: {t.get('image')}")
     print(f"Caption Length: {len(t.get('caption', ''))} characters")
+    th_token_set = bool(os.environ.get("THREADS_ACCESS_TOKEN", "").strip())
+    print(f"Threads Cross-post: {'Configured (Active)' if th_token_set else 'Awaiting THREADS_ACCESS_TOKEN secret'}")
     print("Dry run completed successfully. (Publishing explicitly disabled in dry run mode).")
 
 if __name__ == "__main__":

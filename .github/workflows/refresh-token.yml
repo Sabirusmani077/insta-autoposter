@@ -27,9 +27,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install pynacl
 
-      - name: Refresh Instagram Access Token
+      - name: Refresh Instagram and Threads Access Tokens
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           GH_PAT: ${{ secrets.GH_PAT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python refresh.py

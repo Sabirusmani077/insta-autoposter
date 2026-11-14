@@ -36,14 +36,14 @@ def refresh_instagram_token(current_token):
         print(f"::error::Network error while refreshing token: {e}")
         sys.exit(1)
 
-def update_github_secret(new_token, repo, gh_pat):
+def update_github_secret(new_token, repo, gh_pat, secret_name="IG_ACCESS_TOKEN"):
     """
-    Encrypts new_token with repository public key and updates IG_ACCESS_TOKEN secret on GitHub.
+    Encrypts new_token with repository public key and updates given secret on GitHub.
     """
     try:
         from nacl import encoding, public
     except ImportError:
-        print("::warning::PyNaCl library not installed. Cannot encrypt and update GitHub secret automatically.")
+        print(f"::warning::PyNaCl library not installed. Cannot encrypt and update {secret_name} automatically.")
         return False
 
     headers = {
@@ -72,7 +72,7 @@ def update_github_secret(new_token, repo, gh_pat):
     encrypted_b64 = base64.b64encode(encrypted).decode("utf-8")
 
     # 3. Update secret
-    secret_url = f"https://api.github.com/repos/{repo}/actions/secrets/IG_ACCESS_TOKEN"
+    secret_url = f"https://api.github.com/repos/{repo}/actions/secrets/{secret_name}"
     payload = json.dumps({
         "encrypted_value": encrypted_b64,
         "key_id": key_id
@@ -82,34 +82,58 @@ def update_github_secret(new_token, repo, gh_pat):
     try:
         with urllib.request.urlopen(put_req, timeout=30) as resp:
             if resp.status in (201, 204):
-                print("Successfully updated IG_ACCESS_TOKEN secret in GitHub repository!")
+                print(f"Successfully updated {secret_name} secret in GitHub repository!")
                 return True
     except Exception as e:
-        print(f"::warning::Failed to update GitHub secret via API: {e}")
+        print(f"::warning::Failed to update {secret_name} via API: {e}")
         return False
 
     return False
 
+def refresh_threads_token(current_token):
+    """
+    Calls Meta Threads API refresh endpoint to extend long-lived token by 60 days.
+    (Note: Meta allows refresh only after token is at least 24 hours old).
+    """
+    url = "https://graph.threads.net/refresh_access_token"
+    params = urllib.parse.urlencode({
+        "grant_type": "th_refresh_token",
+        "access_token": current_token
+    })
+    req = urllib.request.Request(f"{url}?{params}", headers={"User-Agent": "InstaAutoPoster/2.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            new_token = data.get("access_token")
+            expires_in = data.get("expires_in", 0)
+            days = expires_in // 86400
+            print(f"Threads Token refresh successful! New token validity: {days} days ({expires_in} seconds).")
+            return new_token
+    except urllib.error.HTTPError as e:
+        err = e.read().decode("utf-8", errors="replace")
+        print(f"::warning::Threads Token Refresh Notice (token may be < 24h old): {err}")
+        return None
+    except Exception as e:
+        print(f"::warning::Network error while refreshing Threads token: {e}")
+        return None
+
 def main():
     current_token = os.environ.get("IG_ACCESS_TOKEN", "").strip()
-    if not current_token:
-        print("::error::IG_ACCESS_TOKEN is not provided in environment.")
-        sys.exit(1)
-
-    print("Refreshing Instagram Long-Lived Access Token...")
-    new_token = refresh_instagram_token(current_token)
-
+    threads_token = os.environ.get("THREADS_ACCESS_TOKEN", "").strip()
     repo = os.environ.get("GITHUB_REPOSITORY", "Sabirusmani077/insta-autoposter")
     gh_pat = os.environ.get("GH_PAT", "").strip()
 
-    if gh_pat:
-        print("GH_PAT found. Attempting automatic GitHub repository secret update...")
-        updated = update_github_secret(new_token, repo, gh_pat)
-        if not updated:
-            print("::warning::Could not automatically update GitHub secret via GH_PAT.")
-    else:
-        print("GH_PAT secret not provided. The token was refreshed on Meta's servers, but GitHub secret was not updated automatically.")
-        print("To enable full auto-refresh of repository secrets, add a Personal Access Token named GH_PAT.")
+    if current_token:
+        print("Refreshing Instagram Long-Lived Access Token...")
+        new_token = refresh_instagram_token(current_token)
+        if new_token and gh_pat:
+            update_github_secret(new_token, repo, gh_pat, secret_name="IG_ACCESS_TOKEN")
+
+    if threads_token:
+        print("\nChecking Threads Long-Lived Access Token...")
+        new_th_token = refresh_threads_token(threads_token)
+        if new_th_token and gh_pat:
+            update_github_secret(new_th_token, repo, gh_pat, secret_name="THREADS_ACCESS_TOKEN")
 
 if __name__ == "__main__":
     main()
